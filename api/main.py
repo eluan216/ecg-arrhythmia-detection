@@ -1,7 +1,7 @@
 """Main API application entry point."""
 
-from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from api import app as base_app
 
 # Re-export the app
@@ -19,7 +19,7 @@ app.add_middleware(
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         "api.main:app",
         host="0.0.0.0",

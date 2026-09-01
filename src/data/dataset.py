@@ -1,6 +1,7 @@
 """PyTorch Dataset class for ECG beats."""
 
 from typing import Tuple
+
 import numpy as np
 from torch.utils.data import Dataset
 
@@ -8,10 +9,10 @@ from torch.utils.data import Dataset
 class ECGBeatDataset(Dataset):
     """
     PyTorch Dataset for segmented ECG beats.
-    
+
     Loads preprocessed beat windows and class labels.
     """
-    
+
     def __init__(
         self,
         beat_windows: np.ndarray,
@@ -27,20 +28,19 @@ class ECGBeatDataset(Dataset):
         self.beat_windows = beat_windows
         self.labels = labels
         self.transform = transform
-        
-        assert len(beat_windows) == len(labels), \
-            "Mismatch between number of beats and labels"
-    
+
+        assert len(beat_windows) == len(labels), "Mismatch between number of beats and labels"
+
     def __len__(self) -> int:
         return len(self.beat_windows)
-    
+
     def __getitem__(self, idx: int) -> Tuple[np.ndarray, int]:
         beat = self.beat_windows[idx].astype(np.float32)
         label = self.labels[idx]
-        
+
         if self.transform:
             beat = self.transform(beat)
-        
+
         return beat, label
 
 
