@@ -2,7 +2,7 @@
 
 import warnings
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
@@ -132,16 +132,12 @@ def extract_morphology_features(beat: np.ndarray) -> np.ndarray:
 
     # 11. Kurtosis
     features.append(
-        np.mean(((beat - np.mean(beat)) / np.std(beat)) ** 4)
-        if np.std(beat) > 0
-        else 0
+        np.mean(((beat - np.mean(beat)) / np.std(beat)) ** 4) if np.std(beat) > 0 else 0
     )
 
     # 12. Skewness
     features.append(
-        np.mean(((beat - np.mean(beat)) / np.std(beat)) ** 3)
-        if np.std(beat) > 0
-        else 0
+        np.mean(((beat - np.mean(beat)) / np.std(beat)) ** 3) if np.std(beat) > 0 else 0
     )
 
     # 13. Zero crossing rate
@@ -153,9 +149,8 @@ def extract_morphology_features(beat: np.ndarray) -> np.ndarray:
     try:
         # Simple frequency-domain feature
         fft_magnitude = np.abs(np.fft.fft(beat))
-        spectral_centroid = (
-            np.sum(np.arange(len(fft_magnitude)) * fft_magnitude)
-            / np.sum(fft_magnitude)
+        spectral_centroid = np.sum(np.arange(len(fft_magnitude)) * fft_magnitude) / np.sum(
+            fft_magnitude
         )
         features.append(spectral_centroid / len(fft_magnitude))
     except Exception:
@@ -294,16 +289,12 @@ def predict(request: BeatWindowRequest) -> PredictionResponse:
 
             # Pad/trim to 256 samples
             if len(beat_array) < 256:
-                beat_array = np.pad(
-                    beat_array, (0, 256 - len(beat_array)), mode="constant"
-                )
+                beat_array = np.pad(beat_array, (0, 256 - len(beat_array)), mode="constant")
             else:
                 beat_array = beat_array[:256]
 
             # Prepare input (1, 1, 256)
-            beat_tensor = (
-                torch.from_numpy(beat_array).unsqueeze(0).unsqueeze(0).to(_device)
-            )
+            beat_tensor = torch.from_numpy(beat_array).unsqueeze(0).unsqueeze(0).to(_device)
 
             with torch.no_grad():
                 logits = _cnn_model(beat_tensor)
@@ -313,9 +304,7 @@ def predict(request: BeatWindowRequest) -> PredictionResponse:
             predicted_class = AAMI_CLASSES[predicted_idx]
             confidence = float(probs[predicted_idx])
 
-            class_probs = {
-                label: float(prob) for label, prob in zip(AAMI_CLASSES, probs)
-            }
+            class_probs = {label: float(prob) for label, prob in zip(AAMI_CLASSES, probs)}
 
             return PredictionResponse(
                 predicted_class=predicted_class,
@@ -345,9 +334,7 @@ def predict(request: BeatWindowRequest) -> PredictionResponse:
                 probs[predicted_idx] = 1.0
 
             confidence = float(probs[predicted_idx])
-            class_probs = {
-                label: float(prob) for label, prob in zip(AAMI_CLASSES, probs)
-            }
+            class_probs = {label: float(prob) for label, prob in zip(AAMI_CLASSES, probs)}
 
             return PredictionResponse(
                 predicted_class=predicted_class,
