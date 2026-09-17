@@ -50,6 +50,9 @@ except ImportError:
 
 AAMI_CLASSES = ["N", "V", "S", "F", "Q"]
 
+# NumPy 2.x renamed trapz → trapezoid
+_trapz = getattr(np, "trapezoid", None) or getattr(np, "trapz")
+
 
 @dataclass
 class ModelResult:
@@ -74,7 +77,7 @@ def extract_morphology_features(beats: np.ndarray) -> np.ndarray:
         energy = float(np.sum(beat**2))
         peak_idx = int(np.argmax(np.abs(beat)))
         width_proxy = float(np.sum(np.abs(beat) > 0.3 * peak))
-        qrs_area = float(np.trapz(np.abs(beat)))
+        qrs_area = float(_trapz(np.abs(beat)))
         fft = np.abs(np.fft.rfft(beat))
         spectral_centroid = float(np.sum(np.arange(len(fft)) * fft) / (np.sum(fft) + 1e-8))
         feats.append([peak, mean, std, energy, peak_idx, width_proxy, qrs_area, spectral_centroid])
