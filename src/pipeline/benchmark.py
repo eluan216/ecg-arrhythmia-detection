@@ -189,7 +189,9 @@ def evaluate_on_holdout(
     return metrics
 
 
-def cross_val_f1(model: Any, X: np.ndarray, y: np.ndarray, n_splits: int = 5) -> Tuple[float, float]:
+def cross_val_f1(
+    model: Any, X: np.ndarray, y: np.ndarray, n_splits: int = 5
+) -> Tuple[float, float]:
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
     scores = cross_val_score(model, X, y, cv=cv, scoring="f1_macro", n_jobs=-1)
     return float(scores.mean()), float(scores.std())
