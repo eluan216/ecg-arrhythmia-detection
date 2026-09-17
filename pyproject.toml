@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ecg-arrhythmia-detection"
-version = "0.1.0"
+version = "0.2.0"
 description = "ECG Arrhythmia Detection & Deployment Pipeline - Portfolio project demonstrating ML engineering discipline"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 authors = [
-    {name = "Eluan", email = "eluan@example.com"}
+    {name = "Oguma Eluanatein Odo", email = "ogumaeluan@gmail.com"}
 ]
 
 dependencies = [
@@ -29,6 +29,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+boost = [
+    "xgboost>=1.7.0",
+    "lightgbm>=3.3.0",
+]
 dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
@@ -38,7 +42,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["src"]
+packages = ["src", "src.data", "src.models", "src.train", "src.pipeline", "api"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -55,7 +59,7 @@ target-version = "py39"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
-ignore = ["E501"]  # line too long (handled by black)
+ignore = ["E501"]
 
 [tool.mypy]
 python_version = "3.9"
