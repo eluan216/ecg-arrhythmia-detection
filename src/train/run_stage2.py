@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Dict
 
-from src.data.synthetic import generate_synthetic_dataset, save_synthetic_dataset
+from src.data.synthetic import save_synthetic_dataset
 from src.train.train_baseline import train_baseline
 from src.train.train_cnn import train_cnn
 
@@ -149,9 +149,7 @@ def stage2_pipeline(
                 )
 
             # Determine best model
-            best_model = max(
-                comparison.items(), key=lambda x: x[1]["macro_f1"]
-            )
+            best_model = max(comparison.items(), key=lambda x: x[1]["macro_f1"])
             print("-" * 80)
             print(f"✓ Best model: {best_model[0]} (F1: {best_model[1]['macro_f1']:.4f})")
 
