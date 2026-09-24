@@ -13,29 +13,22 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # MIT-BIH record IDs
-# Records 100-124: random selection from typical waveforms
-# Records 200-234: deliberately selected rare but clinically significant arrhythmias
 MITBIH_RECORDS = list(range(100, 125)) + list(range(200, 235))
-
-# Records to exclude (contain paced beats - common convention in literature)
-EXCLUDED_RECORDS = [102, 104, 107]  # Known to contain paced beats
-
+EXCLUDED_RECORDS = [102, 104, 107]  # paced beats — common exclusion
 MITBIH_RECORDS_FILTERED = [r for r in MITBIH_RECORDS if r not in EXCLUDED_RECORDS]
+
+
+def _record_files_exist(record_id: int, output_path: Path) -> bool:
+    base = output_path / str(record_id)
+    return base.with_suffix(".dat").exists() and base.with_suffix(".hea").exists()
 
 
 def download_mitbih(output_dir: str = "data/raw", verbose: bool = True) -> None:
     """
-    Download MIT-BIH Arrhythmia Database records from PhysioNet.
+    Download MIT-BIH records from PhysioNet into output_dir.
 
-    Records are stored as .dat (signal data) and .atr (annotations) file pairs.
-    Uses wfdb library to retrieve records from PhysioNet.
-
-    Args:
-        output_dir: Directory to store downloaded records.
-        verbose: Print progress information.
-
-    Raises:
-        ImportError: If wfdb library is not installed.
+    Uses wfdb.dl_files (works on Colab and local; does not rely on cache_dir).
+    Files are stored as {id}.dat / {id}.hea / {id}.atr under output_dir.
     """
     if not WFDB_AVAILABLE:
         raise ImportError("wfdb library required. Install with: pip install wfdb")
@@ -45,75 +38,60 @@ def download_mitbih(output_dir: str = "data/raw", verbose: bool = True) -> None:
 
     if verbose:
         print(f"Downloading MIT-BIH Arrhythmia Database to {output_dir}/")
-        print(f"Total records to download: {len(MITBIH_RECORDS_FILTERED)}")
-        print("Records 100-124: typical waveforms")
-        print("Records 200-234: rare but clinically significant arrhythmias")
-        print(
-            f"Excluding {len(MITBIH_RECORDS) - len(MITBIH_RECORDS_FILTERED)} "
-            f"records with paced beats"
-        )
+        print(f"Total records: {len(MITBIH_RECORDS_FILTERED)}")
 
     failed = []
     for i, record_id in enumerate(MITBIH_RECORDS_FILTERED, 1):
+        if _record_files_exist(record_id, output_path):
+            if verbose and i % 10 == 0:
+                print(f"  Already present {i}/{len(MITBIH_RECORDS_FILTERED)}")
+            continue
         try:
-            wfdb.rdrecord(f"mitdb/{record_id}", cache_dir=str(output_path))
-            wfdb.rdann(f"mitdb/{record_id}", "atr", cache_dir=str(output_path))
-
+            files = [f"{record_id}.dat", f"{record_id}.hea", f"{record_id}.atr"]
+            wfdb.dl_files("mitdb", dl_dir=str(output_path), files=files)
             if verbose and i % 10 == 0:
                 print(f"Downloaded {i}/{len(MITBIH_RECORDS_FILTERED)} records")
-
         except Exception as e:
             failed.append((record_id, str(e)))
             if verbose:
                 print(f"Failed to download record {record_id}: {e}")
 
+    ok = len(MITBIH_RECORDS_FILTERED) - len(failed)
     if verbose:
-        print(
-            f"\nDownload complete. {len(MITBIH_RECORDS_FILTERED) - len(failed)} "
-            f"records successfully downloaded."
-        )
+        print(f"\nDownload complete. {ok} records available under {output_dir}/")
         if failed:
             print(f"Failed records: {[r[0] for r in failed]}")
 
 
 def get_record_info(record_dir: str = "data/raw") -> dict:
-    """
-    Get information about downloaded MIT-BIH records.
-
-    Args:
-        record_dir: Directory containing downloaded records.
-
-    Returns:
-        Dictionary with dataset statistics.
-    """
+    """Summarize downloaded MIT-BIH records on disk."""
     if not WFDB_AVAILABLE:
         return {"error": "wfdb library not available"}
 
     record_path = Path(record_dir)
-
     total_records = 0
-    total_signals = 0
     total_annotations = 0
 
     for record_id in MITBIH_RECORDS_FILTERED:
         try:
-            record = wfdb.rdrecord(f"mitdb/{record_id}", cache_dir=str(record_path))
-            ann = wfdb.rdann(f"mitdb/{record_id}", "atr", cache_dir=str(record_path))
+            rec_base = str(record_path / str(record_id))
+            if not Path(rec_base + ".hea").exists():
+                continue
+            record = wfdb.rdrecord(rec_base)
+            ann = wfdb.rdann(rec_base, "atr")
             total_records += 1
-            total_signals += record.nsig
             total_annotations += len(ann.sample)
+            _ = record.nsig
         except Exception:
             pass
 
     return {
         "total_records": total_records,
         "expected_records": len(MITBIH_RECORDS_FILTERED),
-        "total_signals": total_signals,
         "estimated_total_beats": total_annotations,
         "sampling_rate_hz": 360,
         "record_duration_minutes": 30,
-        "resolution_bits": 11,
-        "voltage_range_mv": 10,
+        "path": str(record_path.resolve()),
     }
 
 
