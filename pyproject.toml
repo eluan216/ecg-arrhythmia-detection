@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ecg-arrhythmia-detection"
-version = "0.2.0"
-description = "ECG Arrhythmia Detection & Deployment Pipeline - Portfolio project demonstrating ML engineering discipline"
+version = "0.3.0"
+description = "ECG Arrhythmia Detection with inter-patient evaluation on MIT-BIH"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -26,6 +26,8 @@ dependencies = [
     "mlflow>=2.0.0",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "joblib>=1.2.0",
+    "matplotlib>=3.5.0",
 ]
 
 [project.optional-dependencies]
@@ -42,12 +44,12 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["src", "src.data", "src.models", "src.train", "src.pipeline", "api"]
+packages = ["src", "src.data", "src.models", "src.train", "src.pipeline", "src.eval", "api"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--cov=src --cov-report=term-missing --cov-report=html"
+addopts = "-q"
 
 [tool.black]
 line-length = 100
@@ -60,9 +62,3 @@ target-version = "py39"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
-
-[tool.mypy]
-python_version = "3.9"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = false

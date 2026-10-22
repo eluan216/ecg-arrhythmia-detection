@@ -1,79 +1,81 @@
-# ECG Arrhythmia Detection & Deployment Pipeline
+# ECG Arrhythmia Detection
 
-End-to-end ML engineering for ECG beat classification: multi-model benchmarking, stratified evaluation, MLflow tracking, FastAPI serving, and Docker.
+Inter-patient ECG beat classification on **MIT-BIH**, with a multi-model benchmark, FastAPI serving, Docker, and CI.
 
-**⚠️ DISCLAIMER:** Research and educational project only. **NOT** a medical diagnostic device. Do not use for clinical decisions.
+I built this as an ML engineering portfolio piece: the evaluation protocol is the product, not just the classifier.
+
+**⚠️ Research / education only. NOT a medical device. Do not use for clinical decisions.**
 
 ---
 
-## Engineering pattern
+## Evaluation protocol (default)
 
-```text
-Raw / synthetic beats
-        ↓
-Morphology features
-        ↓
-┌─────────────────────────────────┐
-│ Model Benchmark                 │
-│  Logistic Regression (baseline) │
-│  Random Forest                  │
-│  XGBoost / LightGBM (optional)  │
-│  1D-CNN (raw windows, Stage 2)  │
-└─────────────────────────────────┘
-        ↓
-Stratified 5-fold CV + holdout
-        ↓
-Metric comparison (Precision · Recall · F1 · ROC-AUC)
-        ↓
-Select model (macro-F1 under class imbalance)
-        ↓
-MLflow → FastAPI → Docker → CI
+Results below use an **inter-patient split**: no beat from the same patient appears in both train and test.
+
+| Setting | Value |
+|---------|--------|
+| Dataset | MIT-BIH Arrhythmia Database |
+| Classes | AAMI EC57: N, V, S, F, Q |
+| Excluded records | 102, 104, 107 (paced — common literature exclusion) |
+| Split | Patient-level, `train_ratio=0.8`, `seed=42` |
+| Train / test patients | Written to `models/patient_split.json` |
+| Features | 15-D morphology (see [`src/features.md`](src/features.md)) |
+| CV | GroupKFold over **training patients** (mean ± std macro-F1) |
+| Selection | Highest **macro-F1** on inter-patient holdout |
+
+After you run the real pipeline, the numbers below should be replaced by the JSON in `models/inter_patient_results.json`.
+
+### Results (MIT-BIH, inter-patient)
+
+> Run once with data on disk, then paste measured values here.
+
+```bash
+pip install -e .
+python -m src.data.download
+python -m src.eval.inter_patient
 ```
 
-Candidate models are chosen for the problem (tabular morphology + optional 1D-CNN on windows)—not every algorithm for its own sake.
+| Model | Macro-F1 | Weighted-F1 | Accuracy | GroupKFold macro-F1 |
+|-------|----------|-------------|----------|---------------------|
+| Logistic Regression | *run pipeline* | *…* | *…* | mean ± std |
+| Random Forest | *run pipeline* | *…* | *…* | mean ± std |
+
+**Per-class F1 (best model):** N · V · S · F · Q — from `inter_patient_results.json`.
+
+**Top confusions:** also in that JSON (`top_confusions`). Typical hard pairs under inter-patient evaluation: S↔N and rare F/Q support.
+
+Synthetic offline benchmark (not inter-patient) remains available for CI and quick checks:
+
+```bash
+python -m src.pipeline.benchmark
+```
 
 ---
 
-## Quick start (offline benchmark)
+## Quick start
 
-No PhysioNet download required for the multi-model table:
+### Offline multi-model table (synthetic)
 
 ```bash
 git clone https://github.com/eluan216/ecg-arrhythmia-detection.git
 cd ecg-arrhythmia-detection
 pip install -e ".[dev]"
-# optional boosting models:
-pip install -e ".[boost]"
-
 python -m src.pipeline.benchmark
-# or: python -m src.pipeline.benchmark --samples 300
+pytest tests/ -q
 ```
 
-This runs:
-
-1. Synthetic AAMI-style beats
-2. Morphology feature extraction
-3. Logistic Regression · Random Forest · (XGBoost / LightGBM if installed)
-4. Stratified 5-fold CV + holdout metrics
-5. Model selection by **macro-F1**
-6. Writes `models/benchmark_results.json`
-
-Example output columns: Accuracy · Precision · Recall · F1 · ROC-AUC · CV-F1 ± std.
-
----
-
-## Full MIT-BIH pipeline
+### Real MIT-BIH inter-patient path
 
 ```bash
-pip install -e ".[dev]"
-python -m src.data.download          # PhysioNet MIT-BIH
-python -m src.train.train_baseline   # Random Forest on real features
-python -m src.train.train_cnn        # 1D-CNN on beat windows
-python -m src.evaluate               # Comparison table
-uvicorn api.main:app --reload        # Inference API
+pip install -e .
+python -m src.data.download
+python -m src.eval.inter_patient          # RF + LR, GroupKFold, split file
+python -m src.train.train_cnn            # 1D-CNN (uses processed/synthetic if no NPZ)
+python -m src.evaluate                   # comparison table from metrics JSON
+uvicorn api.main:app --reload
 ```
 
-### Docker
+Docker:
 
 ```bash
 docker build -t ecg-arrhythmia-api:latest .
@@ -82,75 +84,75 @@ docker run -p 8000:8000 ecg-arrhythmia-api:latest
 
 ---
 
-## Model benchmarking
-
-Five AAMI classes (N, V, S, F, Q). Evaluation prioritizes **macro-F1** and per-class precision/recall because the problem is heavily imbalanced—accuracy alone is misleading.
-
-| Model | Role |
-| --- | --- |
-| Logistic Regression | Linear baseline |
-| Random Forest | Nonlinear ensemble benchmark |
-| XGBoost / LightGBM | Gradient boosting (optional deps) |
-| 1D-CNN | Deep model on raw windows (Stage 2) |
-
-**Selection rule:** highest macro-F1 on holdout, with stratified CV as a stability check. Document the winner and why in experiment notes / MLflow.
-
-Inter-patient splits are used on real MIT-BIH data to avoid leakage from beats of the same patient appearing in both train and test.
-
----
-
-## Dataset: MIT-BIH Arrhythmia Database
-
-- 48 records · ~110k annotated beats · 360 Hz  
-- Source: [PhysioNet MIT-BIH](https://physionet.org/content/mitdb/1.0.0/)  
-- Labels mapped to AAMI EC57 classes (N, V, S, F, Q)
-
----
-
-## Repository structure
+## Architecture
 
 ```text
-ecg-arrhythmia-detection/
-├── src/
-│   ├── data/           # download, segment, synthetic
-│   ├── models/         # RF baseline, 1D-CNN
-│   ├── train/          # train scripts, stage2 compare
-│   ├── pipeline/       # multi-model benchmark (this template)
-│   └── evaluate.py
-├── api/                # FastAPI
-├── tests/
-├── .github/workflows/
-├── Dockerfile
-├── pyproject.toml
-└── README.md
+MIT-BIH records
+      │
+      ▼
+R-peak windows → AAMI map (N/V/S/F/Q)
+      │
+      ├── morphology features (15-D) → RF / Logistic Regression
+      └── raw windows               → 1D-CNN (Stage 2)
+      │
+Inter-patient holdout + GroupKFold
+      │
+metrics JSON · confusion matrix · top confusions
+      │
+FastAPI → Docker → CI
 ```
-
----
-
-## API & deployment
-
-```bash
-uvicorn api.main:app --reload
-```
-
-Open `http://localhost:8000/docs`. Cold starts on free hosting may take 30–60s after idle periods.
 
 ---
 
 ## Design decisions
 
-- **Macro-F1 over accuracy** — minority arrhythmia classes must not be hidden  
-- **Stratified CV** — stable estimates under imbalance  
-- **Inter-patient evaluation** on real data — no beat-level leakage  
-- **CPU-friendly CNN** — shallow network, short windows  
-- **Synthetic path** — anyone can run the benchmark without PhysioNet
+- **Macro-F1 over accuracy** — minority arrhythmia classes must not be hidden under N-majority accuracy  
+- **Inter-patient default** — beat-level random splits leak patient identity  
+- **GroupKFold on train patients** — stability without mixing test patients into CV  
+- **Documented exclusions** — paced records 102/104/107  
+- **Synthetic path** — CI and first-run experience without PhysioNet  
+
+---
+
+## Error analysis & limits
+
+- Rare classes (F, Q) have low support; per-class F1 is the honest view  
+- Inter-patient generalization is harder than random beat splits — treat high synthetic F1 with skepticism  
+- Morphology features are not full P-QRS-T delineation  
+- Noise, electrode placement, and domain shift to other devices are out of scope  
+
+---
+
+## Repository layout
+
+```text
+src/data/        download, segment, synthetic
+src/eval/        inter-patient protocol (default rigor path)
+src/models/      RF baseline, 1D-CNN
+src/train/       training scripts
+src/pipeline/    offline multi-model benchmark
+src/features.md  morphology feature definitions
+api/             FastAPI
+tests/
+```
+
+---
+
+## Reproducibility
+
+| Artifact | Path |
+|----------|------|
+| Patient split | `models/patient_split.json` |
+| Full metrics | `models/inter_patient_results.json` |
+| Seed | `42` (see eval module) |
+| Package version | `pyproject.toml` |
 
 ---
 
 ## Author
 
 **Oguma Eluanatein Odo**  
-[GitHub](https://github.com/eluan216) · [LinkedIn](https://linkedin.com/in/eluanatein-oguma-5552571b6) · ogumaeluan@gmail.com
+[GitHub](https://github.com/eluan216) · [LinkedIn](https://linkedin.com/in/eluanatein-oguma-5552571b6)
 
 ---
 
