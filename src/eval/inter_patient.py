@@ -95,9 +95,7 @@ def load_patient_beats(
             labels.append(int(lab))
             groups.append(int(sid))
     if not feats:
-        raise RuntimeError(
-            f"No beats loaded from {record_dir}. Run: python -m src.data.download"
-        )
+        raise RuntimeError(f"No beats loaded from {record_dir}. Run: python -m src.data.download")
     return np.asarray(feats), np.asarray(labels), np.asarray(groups)
 
 
@@ -136,9 +134,7 @@ def group_cv_macro_f1(
     if n_splits < 2:
         return float("nan"), float("nan"), []
     gkf = GroupKFold(n_splits=n_splits)
-    scores = cross_val_score(
-        model, X, y, cv=gkf, groups=groups, scoring="f1_macro", n_jobs=-1
-    )
+    scores = cross_val_score(model, X, y, cv=gkf, groups=groups, scoring="f1_macro", n_jobs=-1)
     return float(scores.mean()), float(scores.std()), [float(s) for s in scores]
 
 
@@ -317,9 +313,7 @@ def run_inter_patient_rf(
         "class_labels": AAMI_CLASSES,
         "disclaimer": results["disclaimer"],
     }
-    (output_dir / "baseline_metrics.json").write_text(
-        json.dumps(compat, indent=2), encoding="utf-8"
-    )
+    (output_dir / "baseline_metrics.json").write_text(json.dumps(compat, indent=2), encoding="utf-8")
 
     try:
         import joblib
