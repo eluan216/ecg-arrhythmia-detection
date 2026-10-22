@@ -1,6 +1,5 @@
 """FastAPI application for ECG arrhythmia inference."""
 
-import os
 import warnings
 from pathlib import Path
 from typing import List, Optional
@@ -58,6 +57,7 @@ def load_models(model_dir: str = "models") -> dict:
     if cnn_file.exists():
         try:
             import torch
+
             from src.models.cnn_pytorch import ECG1DCNN
 
             _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -168,10 +168,7 @@ def _predict_cnn(beat_array: np.ndarray) -> PredictionResponse:
         beat_array = beat_array[:CNN_INPUT_LENGTH]
 
     beat_tensor = (
-        torch.from_numpy(beat_array.astype(np.float32))
-        .unsqueeze(0)
-        .unsqueeze(0)
-        .to(_device)
+        torch.from_numpy(beat_array.astype(np.float32)).unsqueeze(0).unsqueeze(0).to(_device)
     )
     with torch.no_grad():
         logits = _cnn_model(beat_tensor)

@@ -139,37 +139,30 @@ def extract_morphology_features(beat_window: np.ndarray) -> np.ndarray:
 
 # --- Annotation mapping (whitelist only; never map unknown → Q) ---
 
-# Explicit beat symbols accepted into AAMI classes
 BEAT_SYMBOL_TO_AAMI: Dict[str, str] = {
-    # N family
     "N": "N",
     "L": "N",
     "R": "N",
-    "e": "N",  # atrial escape — often folded into N in AAMI practice; kept explicit
-    "j": "N",  # nodal escape
-    # V family
+    "e": "N",
+    "j": "N",
     "V": "V",
-    "E": "V",  # ventricular escape
-    # S family
+    "E": "V",
     "A": "S",
     "a": "S",
     "J": "S",
     "S": "S",
-    # Fusion
     "F": "F",
-    # Unknown / paced grouped as Q in AAMI
-    "/": "Q",  # paced
-    "f": "Q",  # fusion of paced and normal
+    "/": "Q",
+    "f": "Q",
     "Q": "Q",
 }
 
-# Non-beat annotation symbols — skip, never label as arrhythmia
 NON_BEAT_SYMBOLS = frozenset(
     {
-        "+",  # rhythm change
-        "~",  # signal quality
-        "|",  # isolated QRS-like
-        "x",  # non-conducted P
+        "+",
+        "~",
+        "|",
+        "x",
         "(",
         ")",
         "p",
@@ -190,11 +183,7 @@ AAMI_CLASS_INDEX = {cls: idx for idx, cls in enumerate(AAMI_CLASSES)}
 
 
 def map_to_aami_class(mitbih_symbol: str) -> Optional[str]:
-    """
-    Map a MIT-BIH annotation symbol to an AAMI class, or None if not a usable beat.
-
-    Unknown symbols return None (caller must skip) — they are **not** forced to Q.
-    """
+    """Map MIT-BIH symbol to AAMI class, or None if not a usable beat."""
     if mitbih_symbol in NON_BEAT_SYMBOLS:
         return None
     return BEAT_SYMBOL_TO_AAMI.get(mitbih_symbol)
@@ -217,12 +206,7 @@ def load_mitbih_record(
     beat_length: int = DEFAULT_BEAT_LENGTH,
     channel: int = 0,
 ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
-    """
-    Load a MIT-BIH record and extract segmented beats with AAMI labels.
-
-    Returns beat windows, integer labels, and a distribution summary string list.
-    Annotation stats (accepted / rejected / non-beat) are included in the summary.
-    """
+    """Load a MIT-BIH record and extract segmented beats with AAMI labels."""
     if not WFDB_AVAILABLE:
         raise ImportError("wfdb library required for loading MIT-BIH records")
 
@@ -296,9 +280,8 @@ def create_inter_patient_split(
     """
     Subject-disjoint split of record IDs.
 
-    Records that share a subject (e.g. 201/202) are kept in the same partition.
+    Records that share a subject (e.g. 201/202) stay in the same partition.
     """
-    # Build subject → records
     subject_to_records: Dict[int, List[int]] = {}
     for rid in record_ids:
         sid = subject_id_for_record(rid)
@@ -309,7 +292,6 @@ def create_inter_patient_split(
     shuffled = rng.permutation(subjects)
     split_idx = int(len(shuffled) * train_ratio)
     train_subjects = set(shuffled[:split_idx].tolist())
-    test_subjects = set(shuffled[split_idx:].tolist())
 
     train_records: List[int] = []
     test_records: List[int] = []
@@ -319,7 +301,6 @@ def create_inter_patient_split(
         else:
             test_records.extend(sorted(recs))
 
-    # Integrity: no shared subjects
     train_subj = {subject_id_for_record(r) for r in train_records}
     test_subj = {subject_id_for_record(r) for r in test_records}
     assert train_subj.isdisjoint(test_subj), "Subject leakage in split"
