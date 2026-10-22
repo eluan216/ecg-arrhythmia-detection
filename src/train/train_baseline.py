@@ -1,8 +1,7 @@
 """Train scikit-learn Random Forest baseline on ECG data.
 
-Uses real MIT-BIH records when available under data/raw.
-Falls back to synthetic morphology features if no records load
-(so Colab / offline demos never hard-fail with empty data).
+Uses real MIT-BIH records when available under data/raw with an inter-patient
+split. Falls back to synthetic morphology features if no records load.
 """
 
 import json
@@ -15,7 +14,6 @@ from sklearn.metrics import (
     confusion_matrix,
     precision_recall_fscore_support,
 )
-from sklearn.model_selection import train_test_split
 
 try:
     import mlflow
@@ -32,6 +30,11 @@ from src.data.segment import (
     load_mitbih_record,
 )
 from src.models.baseline_sklearn import ECGBaselineRF
+
+try:
+    from src.eval.inter_patient import save_patient_split
+except ImportError:
+    save_patient_split = None
 
 
 def load_and_preprocess_dataset(
@@ -128,6 +131,7 @@ def train_baseline(
     print("=" * 80)
 
     data_source = "mitbih"
+    protocol = "inter-patient"
     X_train: Optional[np.ndarray] = None
     y_train: Optional[np.ndarray] = None
     X_test: Optional[np.ndarray] = None
@@ -142,8 +146,17 @@ def train_baseline(
             seed=seed,
         )
         print("\nTrain/Test split (by patient):")
-        print(f"  Training patients: {len(train_records)}")
-        print(f"  Test patients:     {len(test_records)}")
+        print(f"  Training patients ({len(train_records)}): {sorted(train_records)}")
+        print(f"  Test patients     ({len(test_records)}): {sorted(test_records)}")
+        if save_patient_split is not None:
+            split_path = save_patient_split(
+                train_records,
+                test_records,
+                output_dir / "patient_split.json",
+                seed=seed,
+            )
+            print(f"  Split file → {split_path}")
+
         print(f"\nLoading training data from {beat_data_dir}/")
         X_train, y_train = load_and_preprocess_dataset(
             train_records,
@@ -162,6 +175,7 @@ def train_baseline(
         print(f"\nMIT-BIH load failed: {e}")
         X_train, y_train, X_test, y_test = _synthetic_feature_split(seed=seed)
         data_source = "synthetic"
+        protocol = "random-beat (synthetic)"
         train_records, test_records = [], []
 
     assert X_train is not None and y_train is not None
@@ -186,7 +200,7 @@ def train_baseline(
     print("\n" + "=" * 80)
     print("RESULTS")
     print("=" * 80)
-    print(f"Data source: {data_source}")
+    print(f"Data source: {data_source} | protocol: {protocol}")
     print("Macro-averaged metrics:")
     print(f"  Precision: {macro_precision:.4f}")
     print(f"  Recall:    {macro_recall:.4f}")
@@ -205,9 +219,13 @@ def train_baseline(
     metrics = {
         "model": "Random Forest Baseline",
         "data_source": data_source,
+        "protocol": protocol,
+        "seed": seed,
         "n_estimators": n_estimators,
         "feature_type": "handcrafted morphology",
         "n_features": int(X_train.shape[1]),
+        "train_patient_ids": sorted(train_records),
+        "test_patient_ids": sorted(test_records),
         "train_records": len(train_records),
         "test_records": len(test_records),
         "train_samples": int(len(y_train)),
@@ -234,7 +252,9 @@ def train_baseline(
                     {
                         "model": "Random Forest",
                         "data_source": data_source,
+                        "protocol": protocol,
                         "n_estimators": n_estimators,
+                        "seed": seed,
                     }
                 )
                 mlflow.log_metrics(
