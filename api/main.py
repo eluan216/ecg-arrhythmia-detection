@@ -1,18 +1,22 @@
 """Main API application entry point."""
 
+import os
+
 from fastapi.middleware.cors import CORSMiddleware
 
 from api import app as base_app
 
-# Re-export the app
 app = base_app
 
-# Add CORS middleware for web frontend access (if deployed)
+# Explicit origins only — override with ECG_CORS_ORIGINS=comma,separated,list
+_raw = os.getenv("ECG_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
+_origins = [o.strip() for o in _raw.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 

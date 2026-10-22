@@ -1,12 +1,14 @@
-# Morphology features (15-D)
+# Morphology features (`morphology_v1`, 15-D)
 
-Each beat window (~250 samples @ 360 Hz, R-peak centered) is mapped to a fixed feature vector used by the tabular models.
+**Single source of truth:** `src.data.segment.extract_morphology_features`
+
+Training, evaluation, and the API all call this function. Feature vectors from older code or duplicated API logic are invalid for models trained on `morphology_v1`.
 
 | # | Feature | Definition |
 |---|---------|------------|
-| 1 | Peak amplitude | max \|signal\| in the window |
-| 2 | Peak location | argmax \|signal\| / length (normalized) |
-| 3 | RMS | root-mean-square amplitude |
+| 1 | Peak amplitude | max \|signal\| |
+| 2 | Peak location | argmax \|signal\| / length |
+| 3 | RMS | root-mean-square |
 | 4 | Min | minimum sample |
 | 5 | Max | maximum sample |
 | 6 | Std | standard deviation |
@@ -20,4 +22,4 @@ Each beat window (~250 samples @ 360 Hz, R-peak centered) is mapped to a fixed f
 | 14 | Excess kurtosis | 4th standardized moment − 3 |
 | 15 | Skewness | 3rd standardized moment |
 
-These are deliberately simple, clinically motivated morphology descriptors (amplitude, width proxies, slope, shape). They are **not** a full fiducial P-QRS-T delineation pipeline.
+`FEATURE_VERSION` is stored with metrics when available. Bump the version string if any definition changes.
