@@ -2,7 +2,7 @@
 
 import warnings
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
@@ -10,7 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.data.segment import (
     AAMI_CLASSES,
-    DEFAULT_BEAT_LENGTH,
     FEATURE_DIM,
     FEATURE_VERSION,
     extract_morphology_features,
@@ -76,6 +75,7 @@ def _load_models() -> None:
     if cnn_path.exists():
         try:
             import torch
+
             from src.models.cnn1d import ECGCNN1D
 
             _device = "cuda" if torch.cuda.is_available() else "cpu"

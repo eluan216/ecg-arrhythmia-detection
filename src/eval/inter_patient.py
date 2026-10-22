@@ -39,9 +39,7 @@ DISCLAIMER = (
 def _metrics_block(
     y_true: np.ndarray, y_pred: np.ndarray, labels: List[str] = AAMI_CLASSES
 ) -> Dict[str, Any]:
-    report = classification_report(
-        y_true, y_pred, labels=labels, output_dict=True, zero_division=0
-    )
+    report = classification_report(y_true, y_pred, labels=labels, output_dict=True, zero_division=0)
     cm = confusion_matrix(y_true, y_pred, labels=labels).tolist()
     per_class = {
         c: {
@@ -72,9 +70,7 @@ def _top_confusions(
             if i != j and cm[i, j] > 0:
                 pairs.append((true_c, pred_c, int(cm[i, j])))
     pairs.sort(key=lambda x: -x[2])
-    return [
-        {"true": t, "pred": p, "count": c} for t, p, c in pairs[:k]
-    ]
+    return [{"true": t, "pred": p, "count": c} for t, p, c in pairs[:k]]
 
 
 def load_patient_beats(
@@ -143,9 +139,7 @@ def load_patient_beats(
 
     for rec in records:
         try:
-            beats, labels, meta = load_mitbih_record(
-                data_dir, rec, max_beats=max_beats_per_record
-            )
+            beats, labels, meta = load_mitbih_record(data_dir, rec, max_beats=max_beats_per_record)
         except Exception as exc:
             print(f"Skip record {rec}: {exc}")
             continue
@@ -337,9 +331,7 @@ def run_inter_patient_rf(
             "protocol": "inter-patient",
             "classes": AAMI_CLASSES,
         }
-        (output_dir / "baseline_meta.json").write_text(
-            json.dumps(meta, indent=2), encoding="utf-8"
-        )
+        (output_dir / "baseline_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     except Exception as exc:  # pragma: no cover
         print(f"Model persist skipped: {exc}")
 
