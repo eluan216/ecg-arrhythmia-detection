@@ -1,18 +1,24 @@
 # Status
 
-**Active hardening — inter-patient rigor path**
+**Phase 1 (correctness) — implemented**
 
-| Area | State |
+| Item | State |
 |------|--------|
-| Inter-patient split + patient ID file | Done (`src/eval/inter_patient.py`) |
-| GroupKFold on train patients | Done |
-| Morphology feature doc | Done (`src/features.md`) |
-| Offline synthetic benchmark | Done |
-| MIT-BIH measured results in README | Run `python -m src.eval.inter_patient` then publish numbers |
-| CNN inter-patient parity | Partial (train_cnn still prefers synthetic/processed) |
-| Error analysis section | Structured via `top_confusions` in results JSON |
-| Doc consolidation | STAGE_* reports superseded by README + DEVELOPMENT.md |
+| Unified morphology features (`morphology_v1`) | Done — train + API share `src.data.segment.extract_morphology_features` |
+| Feature parity tests | Done — `tests/test_feature_parity.py` |
+| Annotation whitelist (unknown ≠ Q) | Done |
+| Subject-disjoint split (201/202 together) | Done |
+| ECG input contract (NaN/empty/rank/length) | Done |
+| CORS not `*` by default | Done — `ECG_CORS_ORIGINS` |
+| `/ready` vs `/health` | Done |
+| Explicit dataset_type in metrics | Done for inter-patient path |
+| Silent synthetic fallback | Still present in `train_baseline` / `train_cnn` for offline demos — **do not publish those metrics as MIT-BIH** |
 
-Release target: portfolio-v1 after measured MIT-BIH table is committed.
+**Next (Phase 2)**
 
-eluan216 — 2026-10-22
+- CNN on the same subject-disjoint partition as RF
+- Require `--allow-synthetic` (fail closed when MIT-BIH missing)
+- Measured MIT-BIH table committed to README
+- Remove STAGE_* narrative docs after results freeze
+
+eluan216 — 2026-10-23
