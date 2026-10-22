@@ -58,9 +58,7 @@ def load_and_preprocess_dataset(
                 channel=0,
             )
             if extract_features:
-                features = np.array(
-                    [extract_morphology_features(beat) for beat in beat_windows]
-                )
+                features = np.array([extract_morphology_features(beat) for beat in beat_windows])
                 all_data.append(features)
             else:
                 all_data.append(beat_windows)
