@@ -26,8 +26,8 @@ from src.data.segment import (
     AAMI_CLASSES,
     FEATURE_DIM,
     FEATURE_VERSION,
-    extract_morphology_features,
     create_inter_patient_split,
+    extract_morphology_features,
     load_mitbih_record,
     subject_id_for_record,
 )
@@ -89,7 +89,7 @@ def load_patient_beats(
 
     X_list: List[np.ndarray] = []
     y_list: List[str] = []
-    groups_list: List[str] = []
+    groups_list: List[int] = []
     record_ids: List[str] = []
 
     for rec in records:
@@ -103,7 +103,7 @@ def load_patient_beats(
             continue
         if len(beats) == 0:
             continue
-        subj = subject_id_for_record(rec)
+        subj = subject_id_for_record(int(rec))
         for beat, lab in zip(beats, labels):
             X_list.append(extract_morphology_features(beat))
             y_list.append(AAMI_CLASSES[int(lab)])
@@ -250,9 +250,11 @@ def run_inter_patient_rf(
                 clf.fit(X_train[tr], y_train[tr])
                 pred = clf.predict(X_train[va])
                 cv_scores.append(
-                    float(f1_score(
+                    float(
+                        f1_score(
                             y_train[va], pred, labels=AAMI_CLASSES, average="macro", zero_division=0
-                        ))
+                        )
+                    )
                 )
 
         clf.fit(X_train, y_train)
@@ -308,7 +310,7 @@ def run_inter_patient_rf(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Inter-patient MIT-BIH evaluation")
-    parser.add_argument("--data-dir", type=Path, default=Path("data/mitbih"))
+    parser.add_argument("--data-dir", type=Path, default=Path("data/raw"))
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/eval"))
     parser.add_argument("--n-splits", type=int, default=5)
     parser.add_argument("--max-beats-per-record", type=int, default=None)
