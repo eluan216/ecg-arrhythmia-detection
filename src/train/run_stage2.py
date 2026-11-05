@@ -79,6 +79,7 @@ def stage2_pipeline(
                 output_dir=output_dir,
                 n_estimators=100,
                 seed=42,
+                use_synthetic=use_synthetic,
             )
             results["baseline"] = baseline_metrics
         except Exception as e:
