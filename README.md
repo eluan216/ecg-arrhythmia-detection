@@ -46,7 +46,7 @@ provided by the dataset annotations; this does not measure R-peak detection.
 | Model | Macro-F1 | Weighted-F1 | Accuracy | 5-fold GroupKFold macro-F1 |
 |-------|----------|-------------|----------|----------------------------|
 | Random Forest (200 trees) | 35.83% | 94.96% | **94.79%** | 28.61% ± 4.02 percentage points |
-| 1D-CNN (raw windows) | *not measured on this split* | — | — | — |
+| 1D-CNN (raw windows) | *run `--from-patient-split` to measure* | — | — | — |
 
 The model and seed were fixed before this run. Cross-validation uses training
 subjects only; the held-out set was used for final reporting, not model selection.
@@ -129,7 +129,17 @@ python -m src.eval.inter_patient          # RF, GroupKFold, split file (fail clo
 uvicorn api.main:app --reload
 ```
 
-**CNN note:** the 1D-CNN trainer is implemented, but inter-patient MIT-BIH CNN metrics are **not** published in the results table above. Do not mix synthetic/random-beat CNN scores with the measured RF protocol. To compare fairly, export beats on the same seed-42 patient split used by `src.eval.full_mitbih` / `reports/mitbih/2026-11-05/patient_split.json`, then train without `--allow-synthetic`.
+**CNN note:** inter-patient MIT-BIH CNN metrics are **not** yet in the results table above. The trainer now supports the same subject-disjoint partition:
+
+```bash
+python -m src.data.download
+python -m src.train.train_cnn \
+  --from-patient-split reports/mitbih/2026-11-05/patient_split.json \
+  --output-dir models/cnn_interpatient \
+  --epochs 50
+```
+
+Do not mix synthetic/random-beat CNN scores with the measured RF protocol. Publish only metrics produced by the command above.
 
 Docker:
 
@@ -149,7 +159,7 @@ MIT-BIH records
 R-peak windows → AAMI map (N/V/S/F/Q)
       │
       ├── morphology features (15-D) → RF / Logistic Regression
-      └── raw windows               → 1D-CNN (not yet measured inter-patient)
+      └── raw windows               → 1D-CNN (same patient split via --from-patient-split)
       │
 Inter-patient holdout + GroupKFold
       │
