@@ -67,6 +67,7 @@ def main():
         baseline_metrics = train_baseline(
             beat_data_dir="data/processed",
             output_dir="models",
+            use_synthetic=True,  # offline demo path only
         )
         print(f"  ✓ Baseline F1-Score: {baseline_metrics.get('macro_f1', 0):.4f}")
 
