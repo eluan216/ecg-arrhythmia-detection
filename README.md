@@ -46,6 +46,7 @@ provided by the dataset annotations; this does not measure R-peak detection.
 | Model | Macro-F1 | Weighted-F1 | Accuracy | 5-fold GroupKFold macro-F1 |
 |-------|----------|-------------|----------|----------------------------|
 | Random Forest (200 trees) | 35.83% | 94.96% | **94.79%** | 28.61% ± 4.02 percentage points |
+| 1D-CNN (raw windows) | *not measured on this split* | — | — | — |
 
 The model and seed were fixed before this run. Cross-validation uses training
 subjects only; the held-out set was used for final reporting, not model selection.
@@ -110,26 +111,25 @@ pytest tests/ -q
 Start with `uvicorn api.main:app --reload`. The API loads trusted local
 `baseline_model.pkl` and/or `cnn_model.pth` artifacts. Set `ECG_MODEL_DIR`
 to select a directory explicitly; the default search includes `models/`,
-`artifacts/models/`, and `artifacts/eval/`. Restart after replacing models.
+`artifacts/models/`, and `artifacts/eval/`.
 
 POST `/predict` accepts `{"signal": [/* beat samples */], "sampling_rate": 360, "model": "auto"}`.
-Supply 32–1000 finite samples at 360 Hz. Resample other rates before calling.
-The response contains `predicted_class`, `probabilities`, `model_used`, and
-`feature_version`. Baseline probabilities use the fitted model's class order;
-classes absent during training are omitted. CNN input is padded or trimmed to
-256 samples to match training. `/health` reports liveness; `/ready` returns
-503 until a model is loaded. Prediction also returns 503 when no model is available.
+Supply 32–1000 finite samples at 360 Hz. `/health` reports liveness; `/ready` returns
+503 until a model is loaded.
 
 ### Real MIT-BIH inter-patient path
 
 ```bash
 pip install -e .
 python -m src.data.download
-python -m src.eval.inter_patient          # RF, GroupKFold, split file
-python -m src.train.train_cnn            # 1D-CNN (uses processed/synthetic if no NPZ)
-python -m src.evaluate                   # comparison table from metrics JSON
+python -m src.eval.inter_patient          # RF, GroupKFold, split file (fail closed)
+# Optional offline smoke tests only:
+# python -m src.train.train_baseline --allow-synthetic
+# python -m src.train.train_cnn --allow-synthetic
 uvicorn api.main:app --reload
 ```
+
+**CNN note:** the 1D-CNN trainer is implemented, but inter-patient MIT-BIH CNN metrics are **not** published in the results table above. Do not mix synthetic/random-beat CNN scores with the measured RF protocol. To compare fairly, export beats on the same seed-42 patient split used by `src.eval.full_mitbih` / `reports/mitbih/2026-11-05/patient_split.json`, then train without `--allow-synthetic`.
 
 Docker:
 
@@ -149,7 +149,7 @@ MIT-BIH records
 R-peak windows → AAMI map (N/V/S/F/Q)
       │
       ├── morphology features (15-D) → RF / Logistic Regression
-      └── raw windows               → 1D-CNN (Stage 2)
+      └── raw windows               → 1D-CNN (not yet measured inter-patient)
       │
 Inter-patient holdout + GroupKFold
       │
@@ -162,20 +162,20 @@ FastAPI → Docker → CI
 
 ## Design decisions
 
-- **Macro-F1 over accuracy** — minority arrhythmia classes must not be hidden under N-majority accuracy  
-- **Inter-patient default** — beat-level random splits leak patient identity  
-- **GroupKFold on train patients** — stability without mixing test patients into CV  
-- **Documented exclusions** — repository protocol excludes 102/104/107; retains 217  
-- **Synthetic path** — CI and first-run experience without PhysioNet  
+- **Macro-F1 over accuracy** — minority arrhythmia classes must not be hidden under N-majority accuracy
+- **Inter-patient default** — beat-level random splits leak patient identity
+- **GroupKFold on train patients** — stability without mixing test patients into CV
+- **Documented exclusions** — repository protocol excludes 102/104/107; retains 217
+- **Synthetic path is opt-in** — CI / `quickstart.py` / `--allow-synthetic` only; published metrics require real MIT-BIH
 
 ---
 
 ## Error analysis & limits
 
-- Rare classes (F, Q) have low support; per-class F1 is the honest view  
-- Inter-patient generalization is harder than random beat splits — treat high synthetic F1 with skepticism  
-- Morphology features are not full P-QRS-T delineation  
-- Noise, electrode placement, and domain shift to other devices are out of scope  
+- Rare classes (F, Q) have low support; per-class F1 is the honest view
+- Inter-patient generalization is harder than random beat splits — treat high synthetic F1 with skepticism
+- Morphology features are not full P-QRS-T delineation
+- Noise, electrode placement, and domain shift to other devices are out of scope
 
 ---
 
@@ -209,7 +209,7 @@ tests/
 
 ## Author
 
-**Oguma Eluanatein Odo**  
+**Oguma Eluanatein Odo**
 [GitHub](https://github.com/eluan216) · [LinkedIn](https://linkedin.com/in/eluanatein-oguma-5552571b6)
 
 ---
