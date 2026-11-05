@@ -63,13 +63,17 @@ def _load_models() -> None:
         Path("models"),
         Path("artifacts/eval"),
     ]
-    model_dir = Path(configured_dir) if configured_dir else next(
-        (
-            path
-            for path in candidates
-            if (path / "baseline_model.pkl").exists() or (path / "cnn_model.pth").exists()
-        ),
-        candidates[0],
+    model_dir = (
+        Path(configured_dir)
+        if configured_dir
+        else next(
+            (
+                path
+                for path in candidates
+                if (path / "baseline_model.pkl").exists() or (path / "cnn_model.pth").exists()
+            ),
+            candidates[0],
+        )
     )
 
     baseline_path = model_dir / "baseline_model.pkl"

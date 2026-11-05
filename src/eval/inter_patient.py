@@ -55,7 +55,9 @@ def _metrics_block(
     }
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
-        "macro_f1": float(f1_score(y_true, y_pred, labels=labels, average="macro", zero_division=0)),
+        "macro_f1": float(
+            f1_score(y_true, y_pred, labels=labels, average="macro", zero_division=0)
+        ),
         "weighted_f1": float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
         "per_class": per_class,
         "confusion_matrix": cm,
