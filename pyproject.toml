@@ -39,6 +39,7 @@ dev = [
     "black==24.8.0",
     "ruff==0.6.9",
     "mypy>=1.0.0",
+    "httpx>=0.25.0",
     "jupyter>=1.0.0",
     "ipython>=8.0.0",
 ]

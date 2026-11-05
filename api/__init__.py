@@ -1,5 +1,6 @@
 """FastAPI application for ECG arrhythmia inference."""
 
+import os
 import warnings
 from pathlib import Path
 from typing import List
@@ -10,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.data.segment import (
     AAMI_CLASSES,
+    EXPECTED_FS_HZ,
     FEATURE_DIM,
     FEATURE_VERSION,
     extract_morphology_features,
@@ -36,7 +38,7 @@ class BeatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     signal: List[float] = Field(..., description="1-D ECG beat samples")
-    sampling_rate: float = Field(360.0, gt=0)
+    sampling_rate: float = Field(360.0, gt=0, allow_inf_nan=False)
     model: str = Field("auto", pattern="^(auto|baseline|cnn)$")
 
 
@@ -51,16 +53,28 @@ def _load_models() -> None:
     global _models_loaded, _baseline_model, _cnn_model, _device
     if _models_loaded:
         return
-    model_dir = Path(__file__).resolve().parent.parent / "artifacts" / "models"
-    # fallbacks
-    for cand in [
-        Path(__file__).resolve().parent.parent / "models",
+    root_dir = Path(__file__).resolve().parent.parent
+    configured_dir = os.getenv("ECG_MODEL_DIR")
+    candidates = [
+        root_dir / "artifacts" / "models",
+        root_dir / "models",
+        root_dir / "artifacts" / "eval",
         Path("artifacts/models"),
         Path("models"),
-    ]:
-        if cand.exists():
-            model_dir = cand
-            break
+        Path("artifacts/eval"),
+    ]
+    model_dir = (
+        Path(configured_dir)
+        if configured_dir
+        else next(
+            (
+                path
+                for path in candidates
+                if (path / "baseline_model.pkl").exists() or (path / "cnn_model.pth").exists()
+            ),
+            candidates[0],
+        )
+    )
 
     baseline_path = model_dir / "baseline_model.pkl"
     if baseline_path.exists():
@@ -71,16 +85,16 @@ def _load_models() -> None:
         except Exception as exc:
             warnings.warn(f"Baseline load failed: {exc}")
 
-    cnn_path = model_dir / "cnn_model.pt"
+    cnn_path = model_dir / "cnn_model.pth"
     if cnn_path.exists():
         try:
             import torch
 
-            from src.models.cnn1d import ECGCNN1D
+            from src.models.cnn_pytorch import ECG1DCNN
 
             _device = "cuda" if torch.cuda.is_available() else "cpu"
-            model = ECGCNN1D(num_classes=len(AAMI_CLASSES), input_length=CNN_INPUT_LENGTH)
-            state = torch.load(str(cnn_path), map_location=_device)
+            model = ECG1DCNN(num_classes=len(AAMI_CLASSES))
+            state = torch.load(str(cnn_path), map_location=_device, weights_only=True)
             if isinstance(state, dict) and "state_dict" in state:
                 state = state["state_dict"]
             model.load_state_dict(state)
@@ -96,6 +110,14 @@ def _load_models() -> None:
 @app.on_event("startup")
 def startup() -> None:
     _load_models()
+
+
+@app.get("/")
+def root():
+    return {
+        "service": "ECG Arrhythmia Detection API",
+        "disclaimer": "Research / education only. Not for clinical decisions.",
+    }
 
 
 @app.get("/health")
@@ -127,7 +149,10 @@ def _predict_baseline(beat_array: np.ndarray) -> PredictionResponse:
     if feats is None or len(feats) != FEATURE_DIM:
         raise HTTPException(status_code=400, detail="Feature extraction failed")
     proba = _baseline_model.predict_proba(np.asarray(feats).reshape(1, -1))[0]
-    classes = list(getattr(_baseline_model, "classes_", AAMI_CLASSES))
+    classes = [
+        AAMI_CLASSES[int(c)] if isinstance(c, (int, np.integer)) else str(c)
+        for c in _baseline_model.classes_
+    ]
     pred_idx = int(np.argmax(proba))
     return PredictionResponse(
         predicted_class=str(classes[pred_idx]),
@@ -168,9 +193,15 @@ def predict(req: BeatRequest) -> PredictionResponse:
     """Classify a single ECG beat window."""
     _load_models()
     arr = np.asarray(req.signal, dtype=np.float64)
-    ok, msg = validate_beat_window(arr)
-    if not ok:
-        raise HTTPException(status_code=400, detail=msg or "Invalid beat window")
+    try:
+        arr = validate_beat_window(arr)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if req.sampling_rate != EXPECTED_FS_HZ:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Expected {EXPECTED_FS_HZ} Hz; resample the signal before inference",
+        )
 
     model_choice = (req.model or "auto").lower()
     if model_choice == "auto":

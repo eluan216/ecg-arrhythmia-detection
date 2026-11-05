@@ -21,11 +21,13 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import GroupKFold
 
+from src.data.download import MITBIH_RECORDS_FILTERED
 from src.data.segment import (
     AAMI_CLASSES,
     FEATURE_DIM,
     FEATURE_VERSION,
     create_inter_patient_split,
+    extract_morphology_features,
     load_mitbih_record,
     subject_id_for_record,
 )
@@ -53,7 +55,9 @@ def _metrics_block(
     }
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
-        "macro_f1": float(f1_score(y_true, y_pred, average="macro", zero_division=0)),
+        "macro_f1": float(
+            f1_score(y_true, y_pred, labels=labels, average="macro", zero_division=0)
+        ),
         "weighted_f1": float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
         "per_class": per_class,
         "confusion_matrix": cm,
@@ -83,72 +87,28 @@ def load_patient_beats(
     Returns X, y, groups, record_ids.
     """
     if records is None:
-        # Common MIT-BIH subset used in inter-patient protocols
-        records = [
-            "100",
-            "101",
-            "103",
-            "105",
-            "106",
-            "108",
-            "109",
-            "111",
-            "112",
-            "113",
-            "114",
-            "115",
-            "116",
-            "117",
-            "118",
-            "119",
-            "121",
-            "122",
-            "123",
-            "124",
-            "200",
-            "201",
-            "202",
-            "203",
-            "205",
-            "207",
-            "208",
-            "209",
-            "210",
-            "212",
-            "213",
-            "214",
-            "215",
-            "217",
-            "219",
-            "220",
-            "221",
-            "222",
-            "223",
-            "228",
-            "230",
-            "231",
-            "232",
-            "233",
-            "234",
-        ]
+        records = [str(r) for r in MITBIH_RECORDS_FILTERED]
 
     X_list: List[np.ndarray] = []
     y_list: List[str] = []
-    groups_list: List[str] = []
+    groups_list: List[int] = []
     record_ids: List[str] = []
 
     for rec in records:
         try:
-            beats, labels, meta = load_mitbih_record(data_dir, rec, max_beats=max_beats_per_record)
+            beats, labels, _ = load_mitbih_record(int(rec), record_dir=str(data_dir))
+            if max_beats_per_record is not None:
+                beats = beats[:max_beats_per_record]
+                labels = labels[:max_beats_per_record]
         except Exception as exc:
             print(f"Skip record {rec}: {exc}")
             continue
         if len(beats) == 0:
             continue
-        subj = subject_id_for_record(rec)
+        subj = subject_id_for_record(int(rec))
         for beat, lab in zip(beats, labels):
-            X_list.append(beat)
-            y_list.append(lab)
+            X_list.append(extract_morphology_features(beat))
+            y_list.append(AAMI_CLASSES[int(lab)])
             groups_list.append(subj)
             record_ids.append(rec)
 
@@ -195,6 +155,11 @@ def run_inter_patient_rf(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    if n_splits < 2:
+        raise ValueError("n_splits must be at least 2")
+    if max_beats_per_record is not None and max_beats_per_record < 1:
+        raise ValueError("max_beats_per_record must be positive")
+
     # Prefer real MIT-BIH; synthetic only if explicitly allowed
     try:
         X, y, groups, record_ids = load_patient_beats(
@@ -212,21 +177,21 @@ def run_inter_patient_rf(
         n = 500
         X = rng.normal(size=(n, FEATURE_DIM)).astype(np.float64)
         y = rng.choice(AAMI_CLASSES, size=n)
-        groups = np.array([f"s{i % 10}" for i in range(n)])
-        record_ids = [f"r{i % 20}" for i in range(n)]
+        record_ids = [str(100 + i % 10) for i in range(n)]
+        groups = np.array([subject_id_for_record(int(r)) for r in record_ids])
         dataset_type = "synthetic"
 
     # Fixed inter-patient split for held-out reporting
-    train_idx, test_idx, train_recs, test_recs = create_inter_patient_split(
-        list(dict.fromkeys(record_ids))
+    train_recs, test_recs = create_inter_patient_split(
+        [int(r) for r in dict.fromkeys(record_ids)], seed=seed
     )
     # Map records -> indices
     rec_to_indices: Dict[str, List[int]] = {}
     for i, r in enumerate(record_ids):
         rec_to_indices.setdefault(r, []).append(i)
 
-    train_indices = [i for r in train_recs for i in rec_to_indices.get(r, [])]
-    test_indices = [i for r in test_recs for i in rec_to_indices.get(r, [])]
+    train_indices = [i for r in train_recs for i in rec_to_indices.get(str(r), [])]
+    test_indices = [i for r in test_recs for i in rec_to_indices.get(str(r), [])]
 
     if not train_indices or not test_indices:
         # Fall back to GroupKFold first fold if fixed split empty (synthetic)
@@ -287,7 +252,11 @@ def run_inter_patient_rf(
                 clf.fit(X_train[tr], y_train[tr])
                 pred = clf.predict(X_train[va])
                 cv_scores.append(
-                    float(f1_score(y_train[va], pred, average="macro", zero_division=0))
+                    float(
+                        f1_score(
+                            y_train[va], pred, labels=AAMI_CLASSES, average="macro", zero_division=0
+                        )
+                    )
                 )
 
         clf.fit(X_train, y_train)
@@ -343,7 +312,7 @@ def run_inter_patient_rf(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Inter-patient MIT-BIH evaluation")
-    parser.add_argument("--data-dir", type=Path, default=Path("data/mitbih"))
+    parser.add_argument("--data-dir", type=Path, default=Path("data/raw"))
     parser.add_argument("--output-dir", type=Path, default=Path("artifacts/eval"))
     parser.add_argument("--n-splits", type=int, default=5)
     parser.add_argument("--max-beats-per-record", type=int, default=None)

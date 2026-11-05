@@ -13,14 +13,63 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # MIT-BIH record IDs
-MITBIH_RECORDS = list(range(100, 125)) + list(range(200, 235))
+MITBIH_RECORDS = [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116,
+    117,
+    118,
+    119,
+    121,
+    122,
+    123,
+    124,
+    200,
+    201,
+    202,
+    203,
+    205,
+    207,
+    208,
+    209,
+    210,
+    212,
+    213,
+    214,
+    215,
+    217,
+    219,
+    220,
+    221,
+    222,
+    223,
+    228,
+    230,
+    231,
+    232,
+    233,
+    234,
+]
 EXCLUDED_RECORDS = [102, 104, 107]  # paced beats — common exclusion
 MITBIH_RECORDS_FILTERED = [r for r in MITBIH_RECORDS if r not in EXCLUDED_RECORDS]
 
 
 def _record_files_exist(record_id: int, output_path: Path) -> bool:
     base = output_path / str(record_id)
-    return base.with_suffix(".dat").exists() and base.with_suffix(".hea").exists()
+    return all(base.with_suffix(suffix).exists() for suffix in (".dat", ".hea", ".atr"))
 
 
 def download_mitbih(output_dir: str = "data/raw", verbose: bool = True) -> None:

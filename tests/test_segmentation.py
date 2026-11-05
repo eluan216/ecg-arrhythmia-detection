@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 
 from src.data.segment import (
-    AAMI_CLASS_MAP,
     AAMI_CLASSES,
+    BEAT_SYMBOL_TO_AAMI,
     create_inter_patient_split,
     extract_morphology_features,
     map_to_aami_class,
@@ -118,8 +118,8 @@ class TestAAMIMapping:
     def test_aami_mapping_veb(self):
         """Test mapping of ventricular ectopic beat symbols."""
         assert map_to_aami_class("V") == "V"
-        assert map_to_aami_class("[") == "V"
-        assert map_to_aami_class("]") == "V"
+        assert map_to_aami_class("[") is None
+        assert map_to_aami_class("]") is None
 
     def test_aami_mapping_sveb(self):
         """Test mapping of supraventricular ectopic beat symbols."""
@@ -135,16 +135,16 @@ class TestAAMIMapping:
         """Test mapping of unknown/paced beats."""
         assert map_to_aami_class("/") == "Q"
         assert map_to_aami_class("Q") == "Q"
-        assert map_to_aami_class("e") == "Q"
+        assert map_to_aami_class("e") == "N"
 
     def test_aami_mapping_unmapped_symbol(self):
-        """Test that unmapped symbols default to Q."""
-        assert map_to_aami_class("X") == "Q"
-        assert map_to_aami_class("?") == "Q"
+        """Test that unmapped symbols are excluded."""
+        assert map_to_aami_class("X") is None
+        assert map_to_aami_class("?") is None
 
     def test_all_mapped_symbols_valid(self):
         """Test that all symbols in map produce valid AAMI classes."""
-        for symbol, aami_class in AAMI_CLASS_MAP.items():
+        for symbol, aami_class in BEAT_SYMBOL_TO_AAMI.items():
             assert aami_class in AAMI_CLASSES
             mapped = map_to_aami_class(symbol)
             assert mapped == aami_class
