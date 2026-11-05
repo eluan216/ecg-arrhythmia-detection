@@ -18,6 +18,8 @@ class ECGBaselineRF(BaseEstimator):
             n_estimators: Number of trees in the forest.
             random_state: Random seed for reproducibility.
         """
+        self.n_estimators = n_estimators
+        self.random_state = random_state
         self.model = RandomForestClassifier(
             n_estimators=n_estimators,
             random_state=random_state,
@@ -36,7 +38,10 @@ class ECGBaselineRF(BaseEstimator):
         Returns:
             Self for method chaining.
         """
+        self.model.set_params(n_estimators=self.n_estimators, random_state=self.random_state)
         self.model.fit(X, y)
+        self.classes_ = self.model.classes_
+        self.n_features_in_ = self.model.n_features_in_
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:

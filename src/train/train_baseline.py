@@ -28,6 +28,7 @@ from src.data.segment import (
     create_inter_patient_split,
     extract_morphology_features,
     load_mitbih_record,
+    subject_id_for_record,
 )
 from src.models.baseline_sklearn import ECGBaselineRF
 
@@ -148,10 +149,11 @@ def train_baseline(
         print(f"  Test patients     ({len(test_records)}): {sorted(test_records)}")
         if save_patient_split is not None:
             split_path = save_patient_split(
-                train_records,
-                test_records,
-                output_dir / "patient_split.json",
-                seed=seed,
+                output_dir=output_dir,
+                train_subjects=[subject_id_for_record(r) for r in train_records],
+                test_subjects=[subject_id_for_record(r) for r in test_records],
+                train_records=train_records,
+                test_records=test_records,
             )
             print(f"  Split file → {split_path}")
 

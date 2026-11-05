@@ -18,12 +18,12 @@ Results below use an **inter-patient split**: no beat from the same patient appe
 | Classes | AAMI EC57: N, V, S, F, Q |
 | Excluded records | 102, 104, 107 (paced — common literature exclusion) |
 | Split | Patient-level, `train_ratio=0.8`, `seed=42` |
-| Train / test patients | Written to `models/patient_split.json` |
+| Train / test patients | Written to `artifacts/eval/patient_split.json` |
 | Features | 15-D morphology (see [`src/features.md`](src/features.md)) |
 | CV | GroupKFold over **training patients** (mean ± std macro-F1) |
-| Selection | Highest **macro-F1** on inter-patient holdout |
+| Selection | Fixed Random Forest; holdout reserved for final reporting |
 
-After you run the real pipeline, the numbers below should be replaced by the JSON in `models/inter_patient_results.json`.
+After you run the real pipeline, the numbers below should be replaced by the JSON in `artifacts/eval/inter_patient_results.json`.
 
 ### Results (MIT-BIH, inter-patient)
 
@@ -37,7 +37,6 @@ python -m src.eval.inter_patient
 
 | Model | Macro-F1 | Weighted-F1 | Accuracy | GroupKFold macro-F1 |
 |-------|----------|-------------|----------|---------------------|
-| Logistic Regression | *run pipeline* | *…* | *…* | mean ± std |
 | Random Forest | *run pipeline* | *…* | *…* | mean ± std |
 
 **Per-class F1 (best model):** N · V · S · F · Q — from `inter_patient_results.json`.
@@ -64,12 +63,27 @@ python -m src.pipeline.benchmark
 pytest tests/ -q
 ```
 
+### API contract
+
+Start with `uvicorn api.main:app --reload`. The API loads trusted local
+`baseline_model.pkl` and/or `cnn_model.pth` artifacts. Set `ECG_MODEL_DIR`
+to select a directory explicitly; the default search includes `models/`,
+`artifacts/models/`, and `artifacts/eval/`. Restart after replacing models.
+
+POST `/predict` accepts `{"signal": [/* beat samples */], "sampling_rate": 360, "model": "auto"}`.
+Supply 32–1000 finite samples at 360 Hz. Resample other rates before calling.
+The response contains `predicted_class`, `probabilities`, `model_used`, and
+`feature_version`. Baseline probabilities use the fitted model's class order;
+classes absent during training are omitted. CNN input is padded or trimmed to
+256 samples to match training. `/health` reports liveness; `/ready` returns
+503 until a model is loaded. Prediction also returns 503 when no model is available.
+
 ### Real MIT-BIH inter-patient path
 
 ```bash
 pip install -e .
 python -m src.data.download
-python -m src.eval.inter_patient          # RF + LR, GroupKFold, split file
+python -m src.eval.inter_patient          # RF, GroupKFold, split file
 python -m src.train.train_cnn            # 1D-CNN (uses processed/synthetic if no NPZ)
 python -m src.evaluate                   # comparison table from metrics JSON
 uvicorn api.main:app --reload
@@ -142,8 +156,8 @@ tests/
 
 | Artifact | Path |
 |----------|------|
-| Patient split | `models/patient_split.json` |
-| Full metrics | `models/inter_patient_results.json` |
+| Patient split | `artifacts/eval/patient_split.json` |
+| Full metrics | `artifacts/eval/inter_patient_results.json` |
 | Seed | `42` (see eval module) |
 | Package version | `pyproject.toml` |
 
