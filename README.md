@@ -190,6 +190,16 @@ docker run --rm -p 8000:8000 \
 ```
 
 The image contains application code; model artifacts are supplied at runtime.
+It installs the same pinned CPU scientific environment used by the research workflow.
+
+To exercise the API with one of the explorer examples:
+
+```bash
+python examples/predict.py
+```
+
+The client reports whether the source is synthetic or measured and fails clearly
+when no model is loaded.
 
 ## Remaining research questions
 

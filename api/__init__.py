@@ -27,7 +27,7 @@ app = FastAPI(
         "Classify ECG heartbeats into AAMI EC57 categories. "
         "Research prototype — not a medical device."
     ),
-    version="0.3.0",
+    version="0.4.0",
 )
 
 app.include_router(explorer_router)
