@@ -71,6 +71,25 @@ The RR gain is modest and uncertainty intervals overlap. The CNN performs worse;
 
 See [the measured reports, uncertainty and figures](reports/research/2026-11-08/). The historical RF experiment below is preserved separately.
 
+## Review follow-up: evaluation scope and comparability
+
+The five AAMI groups are already implemented. Rare F/Q test support makes their
+metrics unstable; test counts do not establish training scarcity. New reports
+show beat and subject support for every class in every partition, keep five-class
+macro-F1, and add a clearly labeled conditional N/V/S evaluation of the same model.
+A larger conditional score is a change of scope, not evidence of a better model.
+
+The research workflow now runs the custom split, published 44-record DS1/DS2,
+and a subject-disjoint sensitivity variant as separate columns. **Published
+DS1/DS2 splits the shared patient in records 201/202 across train and test.**
+The variant removes training record 201 and preserves DS2.
+Matching record lists alone does not make different lead or task policies comparable.
+
+A validation-only CNN diagnostic tests normalization and window length.
+The existing CNN already uses per-beat z-score; the cause of its deficit is
+unresolved. New scores and causal conclusions remain pending completed runs.
+See [commands, task definitions and caveats](docs/experiments.md#review-follow-up-task-scope-record-protocols-and-cnn-diagnosis).
+
 ## Historical RF result — 5 November 2026
 
 [Full evaluation run](https://github.com/eluan216/ecg-arrhythmia-detection/actions/runs/42090136918)

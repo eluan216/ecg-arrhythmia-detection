@@ -19,7 +19,11 @@ from src.data.segment import (
     subject_id_for_record,
 )
 
-RR_FEATURE_NAMES = ["previous_rr_seconds", "previous_rr_over_history", "history_rr_seconds"]
+RR_FEATURE_NAMES = [
+    "previous_rr_seconds",
+    "previous_rr_over_history",
+    "history_rr_seconds",
+]
 
 
 @dataclass
@@ -64,6 +68,7 @@ def read_annotated_record(
     drop_outside=False,
     audit=None,
     expected_fs=None,
+    beat_length=250,
 ):
     """Read physical mV, resample before segmentation, and map accepted beat labels."""
     record = wfdb.rdrecord(str(base))
@@ -100,7 +105,7 @@ def read_annotated_record(
     original, samples = original[valid], samples[valid]
     if not accepted:
         raise ValueError(f"{record_id}: no mapped beats inside the recording")
-    windows = np.stack([segment_beat_around_rpeak(signal, int(s)) for s in samples])
+    windows = np.stack([segment_beat_around_rpeak(signal, int(s), beat_length) for s in samples])
     labels = np.asarray([AAMI_CLASS_INDEX[c] for _, c in accepted], dtype=np.int64)
     data = BeatDataset(
         windows.astype(np.float32),
@@ -126,13 +131,19 @@ def concatenate(datasets):
     )
 
 
-def load_mitbih(data_dir, records):
+def load_mitbih(data_dir, records, *, beat_length=250):
     datasets = []
     for rec in records:
         base = Path(data_dir) / str(rec)
         if not base.with_suffix(".hea").exists():
             base = Path(data_dir) / "mitdb" / str(rec)
         datasets.append(
-            read_annotated_record(base, rec, subject_id_for_record(int(rec)), expected_fs=360)
+            read_annotated_record(
+                base,
+                rec,
+                subject_id_for_record(int(rec)),
+                expected_fs=360,
+                beat_length=beat_length,
+            )
         )
     return concatenate(datasets)
