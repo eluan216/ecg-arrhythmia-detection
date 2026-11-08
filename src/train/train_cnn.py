@@ -71,9 +71,7 @@ def load_or_generate_data(
             "Do not publish these metrics as MIT-BIH results."
         )
         beat_data_dir.mkdir(parents=True, exist_ok=True)
-        return generate_synthetic_dataset(
-            n_samples_per_class=200, beat_length=250, test_ratio=0.2
-        )
+        return generate_synthetic_dataset(n_samples_per_class=200, beat_length=250, test_ratio=0.2)
     raise FileNotFoundError(
         f"No beat data under {beat_data_dir} and synthetic generation disabled. "
         "Pass --allow-synthetic for offline smoke tests only, or "
@@ -204,9 +202,9 @@ def train_cnn(
     model = ECG1DCNN(num_classes=5, dropout_rate=0.5).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     class_counts = np.maximum(np.bincount(y_train, minlength=5), 1)
-    class_weights = torch.from_numpy(
-        (len(y_train) / (5.0 * class_counts.astype(np.float32)))
-    ).to(device)
+    class_weights = torch.from_numpy((len(y_train) / (5.0 * class_counts.astype(np.float32)))).to(
+        device
+    )
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     # Epoch count is fixed in advance; the test set never selects a checkpoint.
@@ -242,7 +240,9 @@ def train_cnn(
     precision, recall, f1, support = precision_recall_fscore_support(
         y_true, y_pred, labels=list(range(5)), average=None, zero_division=0
     )
-    macro_f1 = float(f1_score(y_true, y_pred, labels=list(range(5)), average="macro", zero_division=0))
+    macro_f1 = float(
+        f1_score(y_true, y_pred, labels=list(range(5)), average="macro", zero_division=0)
+    )
     weighted_f1 = float(f1_score(y_true, y_pred, average="weighted", zero_division=0))
     acc = float(accuracy_score(y_true, y_pred))
 
