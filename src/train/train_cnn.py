@@ -43,6 +43,8 @@ from sklearn.metrics import (
     precision_recall_fscore_support,
 )
 
+from src.data.segment import normalize_cnn_beats
+
 if TORCH_AVAILABLE:
     from src.data.synthetic import generate_synthetic_dataset
     from src.models.cnn_pytorch import ECG1DCNN
@@ -152,6 +154,8 @@ def train_cnn(
 ) -> Dict:
     if not TORCH_AVAILABLE:
         return {"status": "torch_not_available"}
+    if num_epochs < 1 or batch_size < 1 or learning_rate <= 0:
+        raise ValueError("epochs, batch_size and learning_rate must be positive")
     torch.manual_seed(seed)
     np.random.seed(seed)
     output_dir = Path(output_dir)
@@ -182,15 +186,8 @@ def train_cnn(
     y_train = y_train.astype(np.int64)
     y_test = y_test.astype(np.int64)
 
-    # Per-beat z-score (helps CNN on raw amplitude variation)
-    def _zscore(X: np.ndarray) -> np.ndarray:
-        mu = X.mean(axis=1, keepdims=True)
-        sd = X.std(axis=1, keepdims=True)
-        sd = np.where(sd < 1e-6, 1.0, sd)
-        return (X - mu) / sd
-
-    X_train = _zscore(X_train)
-    X_test = _zscore(X_test)
+    X_train = normalize_cnn_beats(X_train)
+    X_test = normalize_cnn_beats(X_test)
 
     print(
         f"Train: {X_train.shape}, Test: {X_test.shape}, "
@@ -219,8 +216,7 @@ def train_cnn(
     ).to(device)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
-    best_macro = -1.0
-    best_state = None
+    # Epoch count is fixed in advance; the test set never selects a checkpoint.
     for epoch in range(num_epochs):
         model.train()
         running = 0.0
@@ -235,28 +231,10 @@ def train_cnn(
             running += loss.item()
             n_batches += 1
         if (epoch + 1) % 5 == 0 or epoch == 0:
-            # quick holdout check
-            model.eval()
-            y_pred_e, y_true_e = [], []
-            with torch.no_grad():
-                for beats, batch_labels in test_loader:
-                    preds = torch.argmax(model(beats.unsqueeze(1).to(device)), dim=1)
-                    y_pred_e.extend(preds.cpu().numpy())
-                    y_true_e.extend(batch_labels.numpy())
-            mf1 = float(
-                f1_score(y_true_e, y_pred_e, average="macro", zero_division=0)
-            )
             print(
-                f"Epoch {epoch+1}/{num_epochs}  loss={running/max(n_batches,1):.4f}  "
-                f"holdout_macro_f1={mf1:.4f}",
+                f"Epoch {epoch+1}/{num_epochs}  loss={running/max(n_batches,1):.4f}",
                 flush=True,
             )
-            if mf1 > best_macro:
-                best_macro = mf1
-                best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
-
-    if best_state is not None:
-        model.load_state_dict(best_state)
 
     model.eval()
     y_pred, y_true = [], []
@@ -271,7 +249,7 @@ def train_cnn(
     precision, recall, f1, support = precision_recall_fscore_support(
         y_true, y_pred, labels=list(range(5)), average=None, zero_division=0
     )
-    macro_f1 = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
+    macro_f1 = float(f1_score(y_true, y_pred, labels=list(range(5)), average="macro", zero_division=0))
     weighted_f1 = float(f1_score(y_true, y_pred, average="weighted", zero_division=0))
     acc = float(accuracy_score(y_true, y_pred))
 
@@ -288,6 +266,8 @@ def train_cnn(
     metrics: Dict[str, Any] = {
         "model": "1D-CNN (PyTorch)",
         "data_source": data_source,
+        "checkpoint_selection": "fixed-final-epoch",
+        "preprocessing": "per-beat-zscore-v1",
         "num_epochs": num_epochs,
         "batch_size": batch_size,
         "learning_rate": learning_rate,

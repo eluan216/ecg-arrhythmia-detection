@@ -101,10 +101,9 @@ def load_patient_beats(
                 beats = beats[:max_beats_per_record]
                 labels = labels[:max_beats_per_record]
         except Exception as exc:
-            print(f"Skip record {rec}: {exc}")
-            continue
+            raise RuntimeError(f"Failed to load required record {rec}: {exc}") from exc
         if len(beats) == 0:
-            continue
+            raise RuntimeError(f"Required record {rec} contains no accepted beats")
         subj = subject_id_for_record(int(rec))
         for beat, lab in zip(beats, labels):
             X_list.append(extract_morphology_features(beat))

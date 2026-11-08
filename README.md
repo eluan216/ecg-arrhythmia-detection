@@ -1,31 +1,12 @@
 # ECG Arrhythmia Detection
 
-Inter-patient ECG beat classification on **MIT-BIH**, with a multi-model benchmark, FastAPI serving, Docker, and CI.
+I built this project to study how ECG beat classifiers generalize to people they have not seen during training. I use the MIT-BIH Arrhythmia Database, a morphology-based Random Forest baseline, and a compact PyTorch CNN, with a FastAPI service for inference.
 
-I built this as an ML engineering portfolio piece: the evaluation protocol is the product, not just the classifier.
+My focus is reproducible evaluation: keeping patients separate, reporting minority-class failures, and making the data and model assumptions visible.
 
-**⚠️ Research / education only. NOT a medical device. Do not use for clinical decisions.**
+**Research and education only. This is not a medical device or a tool for clinical decisions.**
 
----
-
-## Evaluation protocol (default)
-
-Results below use an **inter-patient split**: no beat from the same patient appears in both train and test.
-
-| Setting | Value |
-|---------|--------|
-| Dataset | MIT-BIH Arrhythmia Database |
-| Classes | AAMI EC57: N, V, S, F, Q |
-| Excluded records | 102, 104, 107 (repository protocol; 217 retained) |
-| Split | Patient-level, `train_ratio=0.8`, `seed=42` |
-| Train / test patients | Written to `artifacts/eval/patient_split.json` |
-| Features | 15-D morphology (see [`src/features.md`](src/features.md)) |
-| CV | GroupKFold over **training patients** (mean ± std macro-F1) |
-| Selection | Fixed Random Forest; holdout reserved for final reporting |
-
-Measured results below were produced by the full real-data run on 2026-11-05, with no beat cap or synthetic fallback.
-
-### Results (MIT-BIH, inter-patient)
+## What I have measured
 
 [Full evaluation run](https://github.com/eluan216/ecg-arrhythmia-detection/actions/runs/42090136918)
 · [Measured report](reports/mitbih/2026-11-05/full_report.json)
@@ -70,66 +51,59 @@ Largest confusions: V→N (394), N→Q (189), S→N (188), N→V (182), and N→
 The full report includes the complete confusion matrix in class order N/V/S/F/Q,
 per-class metrics, file SHA-256 hashes, source commit, and package versions.
 
-Reproduce the complete run:
 
-```bash
-pip install -e .
-python -m src.eval.full_mitbih
-```
+## Run it locally
 
-The runner downloads data, checks that every included record is present and
-evaluated, and writes metrics, split, provenance, and the trained model to
-`artifacts/full-mitbih/`. The workflow also uploads these as the
-`full-mitbih-results` artifact (30-day retention); the measured JSON report is
-committed above for durable access. Core numerical package versions are saved
-in the report. Source data:
-[MIT-BIH Arrhythmia Database v1.0.0](https://physionet.org/content/mitdb/1.0.0/),
-Moody and Mark (2005), DOI: 10.13026/C2F305.
-
-Synthetic offline benchmark (not inter-patient) remains available for CI and quick checks:
-
-```bash
-python -m src.pipeline.benchmark
-```
-
----
-
-## Quick start
-
-### Offline multi-model table (synthetic)
+I use Python 3.11 for the commands below. CI also covers Python 3.9 and 3.10.
 
 ```bash
 git clone https://github.com/eluan216/ecg-arrhythmia-detection.git
 cd ecg-arrhythmia-detection
-pip install -e ".[dev]"
-python -m src.pipeline.benchmark
+python -m venv .venv
+# macOS/Linux:
+source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
 pytest tests/ -q
 ```
 
-### API contract
-
-Start with `uvicorn api.main:app --reload`. The API loads trusted local
-`baseline_model.pkl` and/or `cnn_model.pth` artifacts. Set `ECG_MODEL_DIR`
-to select a directory explicitly; the default search includes `models/`,
-`artifacts/models/`, and `artifacts/eval/`.
-
-POST `/predict` accepts `{"signal": [/* beat samples */], "sampling_rate": 360, "model": "auto"}`.
-Supply 32–1000 finite samples at 360 Hz. `/health` reports liveness; `/ready` returns
-503 until a model is loaded.
-
-### Real MIT-BIH inter-patient path
+For a quick offline demonstration:
 
 ```bash
-pip install -e .
-python -m src.data.download
-python -m src.eval.inter_patient          # RF, GroupKFold, split file (fail closed)
-# Optional offline smoke tests only:
-# python -m src.train.train_baseline --allow-synthetic
-# python -m src.train.train_cnn --allow-synthetic
-uvicorn api.main:app --reload
+python -m src.pipeline.benchmark
 ```
 
-**CNN note:** inter-patient MIT-BIH CNN metrics are **not** yet in the results table above. The trainer now supports the same subject-disjoint partition:
+I use synthetic data for smoke tests only. Its scores are not evidence of performance on real ECGs.
+
+## Reproduce my real-data baseline
+
+```bash
+python -m src.eval.full_mitbih
+```
+
+This downloads the 45 records in my declared protocol, checks the required files, and trains a 200-tree Random Forest. It writes the model, patient split, metrics, data hashes and package versions to `artifacts/full-mitbih/`. Missing or unreadable required records stop evaluation.
+
+My protocol uses:
+
+- Five classes in order **N, V, S, F, Q**, with an explicit beat-symbol whitelist.
+- A custom subject-level 80/20 split with seed 42; records 201 and 202 stay together.
+- Five-fold GroupKFold on training subjects only.
+- Channel 0 at 360 Hz, with 250-sample windows centered on reference beat annotations.
+- Fifteen shared morphology features for training and baseline inference.
+- Exclusions 102, 104 and 107; record 217 is retained.
+
+I keep this cohort unchanged so the checked-in results remain interpretable. It differs from commonly used 44-record protocols and fixed DS1/DS2 partitions. Channel 0 is not always MLII; record 114 has reversed signal order. I do not claim direct comparability to papers using other lead or exclusion policies.
+
+For the lower-level evaluation entry point:
+
+```bash
+python -m src.data.download
+python -m src.eval.inter_patient
+```
+
+This writes to `artifacts/eval/`.
+
+## Train the CNN on the same patient split
 
 ```bash
 python -m src.data.download
@@ -139,97 +113,69 @@ python -m src.train.train_cnn \
   --epochs 50
 ```
 
-Do not mix synthetic/random-beat CNN scores with the measured RF protocol. Publish only metrics produced by the command above.
+I use per-beat z-score normalization in both training and inference. Training now uses a fixed final epoch and evaluates the test set once after training; it does not choose checkpoints using test scores. Macro-F1 includes all five classes, including classes absent from a particular test batch or cohort.
 
-Docker:
+I have not published a measured inter-patient CNN result. Earlier CNN training code selected a checkpoint using the test set; any metrics from that path require a fresh run. Future tuning needs a separate validation partition drawn only from training subjects.
+
+## Serve a trained model
+
+Start the API after generating a model:
 
 ```bash
-docker build -t ecg-arrhythmia-api:latest .
-docker run -p 8000:8000 ecg-arrhythmia-api:latest
+# macOS/Linux
+ECG_MODEL_DIR=artifacts/full-mitbih uvicorn api.main:app --reload
 ```
 
----
-
-## Architecture
-
-```text
-MIT-BIH records
-      │
-      ▼
-R-peak windows → AAMI map (N/V/S/F/Q)
-      │
-      ├── morphology features (15-D) → RF / Logistic Regression
-      └── raw windows               → 1D-CNN (same patient split via --from-patient-split)
-      │
-Inter-patient holdout + GroupKFold
-      │
-metrics JSON · confusion matrix · top confusions
-      │
-FastAPI → Docker → CI
+```powershell
+$env:ECG_MODEL_DIR = "artifacts/full-mitbih"
+uvicorn api.main:app --reload
 ```
 
----
+Open `http://localhost:8000/docs`. POST `/predict` accepts:
 
-## Design decisions
-
-- **Macro-F1 over accuracy** — minority arrhythmia classes must not be hidden under N-majority accuracy
-- **Inter-patient default** — beat-level random splits leak patient identity
-- **GroupKFold on train patients** — stability without mixing test patients into CV
-- **Documented exclusions** — repository protocol excludes 102/104/107; retains 217
-- **Synthetic path is opt-in** — CI / `quickstart.py` / `--allow-synthetic` only; published metrics require real MIT-BIH
-
----
-
-## Error analysis & limits
-
-- Rare classes (F, Q) have low support; per-class F1 is the honest view
-- Inter-patient generalization is harder than random beat splits — treat high synthetic F1 with skepticism
-- Morphology features are not full P-QRS-T delineation
-- Noise, electrode placement, and domain shift to other devices are out of scope
-
----
-
-## Repository layout
-
-```text
-src/data/        download, segment, synthetic
-src/eval/        inter-patient protocol (default rigor path)
-src/models/      RF baseline, 1D-CNN
-src/train/       training scripts
-src/pipeline/    offline multi-model benchmark
-src/features.md  morphology feature definitions
-api/             FastAPI
-tests/
+```json
+{"signal": [0.1, 0.2], "sampling_rate": 360, "model": "auto"}
 ```
 
----
+The two values above illustrate the JSON structure; a valid request needs **32–1000 finite samples**. For results comparable to my benchmark, provide a **250-sample reference-centered beat in physical signal units at 360 Hz**. The service does not locate beats or resample recordings. Other accepted lengths are outside my measured protocol.
 
-## Reproducibility
+`model` can be `auto`, `baseline`, or `cnn`; automatic selection prefers the baseline. `/health` checks liveness and `/ready` returns 503 until a model is available. Set `ECG_MODEL_DIR` to the directory containing `baseline_model.pkl` or `cnn_model.pth`. Load only trusted local model files, using compatible training dependencies.
 
-| Artifact | Path |
-|----------|------|
-| Patient split | `artifacts/eval/patient_split.json` |
-| Full metrics | `artifacts/eval/inter_patient_results.json` |
-| Seed | `42` (see eval module) |
-| Package version | `pyproject.toml` |
-| Measured full-data report | `reports/mitbih/2026-11-05/full_report.json` |
-| Full-data run outputs | `artifacts/full-mitbih/` |
+For Docker, mount your model directory explicitly:
 
----
+```bash
+docker build -t ecg-arrhythmia-api .
+docker run --rm -p 8000:8000 \
+  -v "${PWD}/artifacts/full-mitbih:/models:ro" \
+  -e ECG_MODEL_DIR=/models ecg-arrhythmia-api
+```
 
-## Author
+The image contains application code; model artifacts are supplied at runtime.
 
-**Oguma Eluanatein Odo**
-[GitHub](https://github.com/eluan216) · [LinkedIn](https://linkedin.com/in/eluanatein-oguma-5552571b6)
+## What I want to improve next
 
----
+My current baseline struggles with S, F and Q. I want to evaluate rhythm context and RR intervals, compare models using training-subject validation, quantify uncertainty across subjects, and test robustness to noise and different acquisition devices. Those are planned experiments, not measured improvements.
 
-## License
+This project classifies annotated beats rather than detecting arrhythmia episodes or performing end-to-end R-peak detection. Its small, historical cohort and rare-class supports limit generalization. Model probabilities have not been clinically calibrated.
 
-MIT
+## Repository guide
 
----
+| Path | Purpose |
+| --- | --- |
+| `src/data/` | Downloading, segmentation, shared preprocessing and synthetic fixtures |
+| `src/eval/` | Subject-disjoint evaluation and full-data provenance |
+| `src/models/` | Random Forest wrapper and adaptive-pooling CNN |
+| `src/train/` | Training entry points |
+| `src/pipeline/` | Offline synthetic benchmark |
+| `api/` | FastAPI inference service |
+| `tests/` | Unit and regression tests |
+| `reports/mitbih/` | Measured results and frozen split |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | Development commands and troubleshooting |
+| [Research notes](docs/research.md) | Sources, review findings and methodological decisions |
+| [Historical notes](docs/archive/) | Earlier implementation summaries |
 
-## Disclaimer
+## Sources and credits
 
-**Portfolio / research / education only.** Not a medical device. Not for clinical use.
+I use [MIT-BIH Arrhythmia Database v1.0.0](https://physionet.org/content/mitdb/1.0.0/) by George Moody and Roger Mark (2005), DOI [10.13026/C2F305](https://doi.org/10.13026/C2F305). See its page for dataset terms and citation requirements. My code is released under the [MIT license](LICENSE).
+
+**Oguma Eluanatein Odo** · [GitHub](https://github.com/eluan216) · [LinkedIn](https://linkedin.com/in/eluanatein-oguma-5552571b6)

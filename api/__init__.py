@@ -15,6 +15,7 @@ from src.data.segment import (
     FEATURE_DIM,
     FEATURE_VERSION,
     extract_morphology_features,
+    normalize_cnn_beats,
     validate_beat_window,
 )
 
@@ -31,7 +32,6 @@ _models_loaded = False
 _baseline_model = None
 _cnn_model = None
 _device = "cpu"
-CNN_INPUT_LENGTH = 256
 
 
 class BeatRequest(BaseModel):
@@ -165,11 +165,7 @@ def _predict_baseline(beat_array: np.ndarray) -> PredictionResponse:
 def _predict_cnn(beat_array: np.ndarray) -> PredictionResponse:
     import torch
 
-    # Explicit pad/trim policy for fixed FC layer sized for 256 samples
-    if len(beat_array) < CNN_INPUT_LENGTH:
-        beat_array = np.pad(beat_array, (0, CNN_INPUT_LENGTH - len(beat_array)), mode="constant")
-    elif len(beat_array) > CNN_INPUT_LENGTH:
-        beat_array = beat_array[:CNN_INPUT_LENGTH]
+    beat_array = normalize_cnn_beats(beat_array)
 
     beat_tensor = (
         torch.from_numpy(beat_array.astype(np.float32)).unsqueeze(0).unsqueeze(0).to(_device)
