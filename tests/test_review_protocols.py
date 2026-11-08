@@ -49,3 +49,69 @@ def test_support_counts_independent_subjects_and_absent_classes():
     assert support["N"] == {"beats": 2, "subjects": 1}
     assert support["S"] == {"beats": 1, "subjects": 1}
     assert support["Q"] == {"beats": 0, "subjects": 0}
+
+
+def test_window_loader_preserves_annotation_center(monkeypatch):
+    from src.data import research
+
+    record = SimpleNamespace(
+        sig_name=["MLII"],
+        units=["mV"],
+        fs=360,
+        p_signal=np.arange(1000, dtype=float)[:, None],
+    )
+    annotation = SimpleNamespace(sample=np.array([300, 600]), symbol=["N", "V"])
+    monkeypatch.setattr(research.wfdb, "rdrecord", lambda *a: record)
+    monkeypatch.setattr(research.wfdb, "rdann", lambda *a: annotation)
+    wide = research.read_annotated_record("unused", 100, "patient", beat_length=500)
+    narrow = research.read_annotated_record("unused", 100, "patient")
+    np.testing.assert_array_equal(wide.windows[:, 125:375], narrow.windows)
+    np.testing.assert_array_equal(wide.samples, narrow.samples)
+    np.testing.assert_array_equal(wide.rr, narrow.rr)
+
+
+def test_diagnostic_reads_only_outer_training_records(tmp_path, monkeypatch):
+    import json
+
+    from src.data.research import BeatDataset
+    from src.eval import cnn_diagnostics as diag
+
+    # Simulate the loader and trainer; inspect data access and all six arms.
+    reads, arms = [], []
+    dataset = BeatDataset(
+        np.ones((20, 500), dtype=np.float32),
+        np.arange(20) % 5,
+        np.repeat(np.arange(10).astype(str), 2),
+        np.repeat("100", 20),
+        np.arange(20),
+        np.zeros((20, 3)),
+    )
+    monkeypatch.setattr(diag, "validate_partition", lambda split: ([100, 101], [200]))
+
+    def load(data_dir, records, *, beat_length):
+        reads.append(records)
+        assert beat_length == 500
+        return dataset
+
+    def train(windows, labels, epochs, *, validation, normalizer):
+        arms.append((windows.shape[1], normalizer.__name__))
+        assert windows.shape[1] == validation.windows.shape[1]
+        return None, 1, [{"epoch": 1, "validation_macro_f1": 0.1}]
+
+    monkeypatch.setattr(diag, "load_mitbih", load)
+    monkeypatch.setattr(diag, "train_cnn_epochs", train)
+    split = tmp_path / "split.json"
+    split.write_text(json.dumps({}))
+    report = diag.run(
+        SimpleNamespace(
+            epochs=1,
+            threads=1,
+            output=str(tmp_path / "diagnostic.json"),
+            split=str(split),
+            data_dir="unused",
+        )
+    )
+    assert reads == [[100, 101]]
+    assert len(set(arms)) == 6
+    assert not set(report["fit_subjects"]) & set(report["validation_subjects"])
+    assert len(report["arms"]) == 6
