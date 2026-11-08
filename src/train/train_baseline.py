@@ -8,21 +8,13 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 from sklearn.metrics import (
-    classification_report,
     confusion_matrix,
     precision_recall_fscore_support,
 )
-
-try:
-    import mlflow
-
-    MLFLOW_AVAILABLE = True
-except ImportError:
-    MLFLOW_AVAILABLE = False
 
 from src.data.download import MITBIH_RECORDS_FILTERED
 from src.data.segment import (

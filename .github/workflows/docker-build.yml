@@ -1,35 +1,51 @@
-name: Build & Deploy Docker Image
+name: Container build and API smoke test
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+    paths: ["Dockerfile", ".dockerignore", "pyproject.toml", "api/**", "src/**", ".github/workflows/docker-build.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-
+  container:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
-
-      - name: Build Docker image
+      - name: Build application image
+        run: docker build -t ecg-arrhythmia-api .
+      - name: Create smoke-test model
         run: |
-          docker build -t ecg-arrhythmia-api:latest .
-
-      - name: Run smoke test on image
+          mkdir -p smoke-models
+          docker run --rm -v "$PWD/smoke-models:/models" ecg-arrhythmia-api python -c "import joblib,numpy as np; from sklearn.ensemble import RandomForestClassifier; m=RandomForestClassifier(n_estimators=2,random_state=42).fit(np.zeros((10,15)),np.arange(10)%5); joblib.dump(m,'/models/baseline_model.pkl')"
+      - name: Start API and exercise complete request flow
         run: |
-          docker run --rm ecg-arrhythmia-api:latest python -c "import src; print('Build OK')"
+          docker run -d --name ecg-smoke -p 8000:8000 -v "$PWD/smoke-models:/models:ro" -e ECG_MODEL_DIR=/models ecg-arrhythmia-api
+          python - <<'PY'
+          import json, time, urllib.request
+          for attempt in range(60):
+              try:
+                  with urllib.request.urlopen("http://localhost:8000/ready") as response:
+                      assert response.status == 200
+                  break
+              except OSError:
+                  time.sleep(1)
+          else:
+              raise RuntimeError("API did not become ready")
+          payload = json.dumps({"signal": [0.1] * 250, "model": "baseline"}).encode()
+          request = urllib.request.Request("http://localhost:8000/predict", data=payload, headers={"Content-Type": "application/json"})
+          with urllib.request.urlopen(request) as response:
+              result = json.load(response)
+          assert result["predicted_class"] in "NVSFQ"
+          assert abs(sum(result["probabilities"].values()) - 1) < 1e-6
+          with urllib.request.urlopen("http://localhost:8000/explorer") as response:
+              assert b"ECG Research Explorer" in response.read()
+          PY
+      - name: Container logs
+        if: always()
+        run: docker logs ecg-smoke || true
 
-      # Future: Add steps to push to Docker registry and deploy to Render
-      # - name: Log in to Docker Hub
-      #   uses: docker/login-action@v2
-      #   with:
-      #     username: ${{ secrets.DOCKER_USERNAME }}
-      #     password: ${{ secrets.DOCKER_PASSWORD }}
-      #
-      # - name: Push to Docker Hub
-      #   run: |
-      #     docker push <your-docker-repo>/ecg-arrhythmia-api:latest

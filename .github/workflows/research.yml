@@ -1,0 +1,54 @@
+name: Reproducible research experiments
+
+on:
+  push:
+    branches: [main, "improve/**"]
+    paths:
+      - "src/data/research.py"
+      - "src/eval/research_suite.py"
+      - "src/eval/external.py"
+      - "src/models/artifacts.py"
+      - "src/eval/statistics.py"
+      - "src/data/segment.py"
+      - "src/models/cnn_pytorch.py"
+      - "constraints-research.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      PYTHONUNBUFFERED: "1"
+      OMP_NUM_THREADS: "2"
+      OPENBLAS_NUM_THREADS: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install fixed scientific environment
+        run: |
+          python -m pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -c constraints-research.txt numpy scipy scikit-learn pandas joblib wfdb matplotlib
+      - name: Compare models and rhythm features
+        run: python -m src.eval.research_suite --download --epochs 10 --bootstrap 200
+      - name: Test noise robustness on unseen clean sources
+        run: python -m src.eval.external --dataset nstdb --download --data-dir data/nstdb --output artifacts/research/nstdb.json
+      - name: Test frozen models on all INCART records
+        run: python -m src.eval.external --dataset incartdb --download --data-dir data/incart --output artifacts/research/incart.json
+      - name: Render figures
+        run: python -m src.eval.plots
+      - name: Upload research bundle and figures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecg-research-bundle
+          path: |
+            artifacts/research/
+            artifacts/figures/
+          if-no-files-found: error
+          retention-days: 30

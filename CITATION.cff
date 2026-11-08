@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this software, cite the repository and the datasets separately."
+title: "ECG Arrhythmia Detection"
+type: software
+authors:
+  - family-names: "Oguma"
+    given-names: "Eluanatein Odo"
+url: "https://github.com/eluan216/ecg-arrhythmia-detection"
+license: MIT

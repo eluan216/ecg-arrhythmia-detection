@@ -9,14 +9,17 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.explorer import router as explorer_router
 from src.data.segment import (
     AAMI_CLASSES,
     EXPECTED_FS_HZ,
     FEATURE_DIM,
     FEATURE_VERSION,
     extract_morphology_features,
+    normalize_cnn_beats,
     validate_beat_window,
 )
+from src.models.artifacts import verify_bundle
 
 app = FastAPI(
     title="ECG Arrhythmia Detection API",
@@ -24,14 +27,15 @@ app = FastAPI(
         "Classify ECG heartbeats into AAMI EC57 categories. "
         "Research prototype — not a medical device."
     ),
-    version="0.3.0",
+    version="0.4.0",
 )
+
+app.include_router(explorer_router)
 
 _models_loaded = False
 _baseline_model = None
 _cnn_model = None
 _device = "cpu"
-CNN_INPUT_LENGTH = 256
 
 
 class BeatRequest(BaseModel):
@@ -75,6 +79,14 @@ def _load_models() -> None:
             candidates[0],
         )
     )
+
+    if (model_dir / "manifest.json").exists():
+        try:
+            verify_bundle(model_dir)
+        except Exception as exc:
+            warnings.warn(f"Model bundle rejected: {exc}")
+            _models_loaded = True
+            return
 
     baseline_path = model_dir / "baseline_model.pkl"
     if baseline_path.exists():
@@ -165,11 +177,7 @@ def _predict_baseline(beat_array: np.ndarray) -> PredictionResponse:
 def _predict_cnn(beat_array: np.ndarray) -> PredictionResponse:
     import torch
 
-    # Explicit pad/trim policy for fixed FC layer sized for 256 samples
-    if len(beat_array) < CNN_INPUT_LENGTH:
-        beat_array = np.pad(beat_array, (0, CNN_INPUT_LENGTH - len(beat_array)), mode="constant")
-    elif len(beat_array) > CNN_INPUT_LENGTH:
-        beat_array = beat_array[:CNN_INPUT_LENGTH]
+    beat_array = normalize_cnn_beats(beat_array)
 
     beat_tensor = (
         torch.from_numpy(beat_array.astype(np.float32)).unsqueeze(0).unsqueeze(0).to(_device)

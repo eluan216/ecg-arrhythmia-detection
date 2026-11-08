@@ -137,6 +137,19 @@ def extract_morphology_features(beat_window: np.ndarray) -> np.ndarray:
     return feats
 
 
+def normalize_cnn_beats(beats: np.ndarray) -> np.ndarray:
+    """Per-beat z-score shared by CNN training and inference; preserve length."""
+    arr = np.asarray(beats, dtype=np.float32)
+    if arr.ndim not in (1, 2) or arr.size == 0:
+        raise ValueError("Expected one beat or a non-empty batch of beats")
+    if not np.isfinite(arr).all():
+        raise ValueError("CNN beats must be finite")
+    mean = arr.mean(axis=-1, keepdims=True)
+    std = arr.std(axis=-1, keepdims=True)
+    std = np.where(std < 1e-6, 1.0, std)
+    return (arr - mean) / std
+
+
 # --- Annotation mapping (whitelist only; never map unknown → Q) ---
 
 BEAT_SYMBOL_TO_AAMI: Dict[str, str] = {
@@ -227,6 +240,8 @@ def load_mitbih_record(
     record = wfdb.rdrecord(rec_base)
     ann = wfdb.rdann(rec_base, "atr")
 
+    if record.fs != EXPECTED_FS_HZ:
+        raise ValueError(f"Expected {EXPECTED_FS_HZ} Hz, got {record.fs}")
     signal = record.p_signal[:, channel]
     rpeak_indices = ann.sample
     beat_symbols = ann.symbol
@@ -282,6 +297,11 @@ def create_inter_patient_split(
 
     Records that share a subject (e.g. 201/202) stay in the same partition.
     """
+    if not 0 < train_ratio < 1:
+        raise ValueError("train_ratio must be strictly between 0 and 1")
+    record_ids = list(dict.fromkeys(int(r) for r in record_ids))
+    if len({subject_id_for_record(r) for r in record_ids}) < 2:
+        raise ValueError("At least two distinct subjects are required")
     subject_to_records: Dict[int, List[int]] = {}
     for rid in record_ids:
         sid = subject_id_for_record(rid)
@@ -291,6 +311,8 @@ def create_inter_patient_split(
     rng = np.random.RandomState(seed)
     shuffled = rng.permutation(subjects)
     split_idx = int(len(shuffled) * train_ratio)
+    if split_idx == 0 or split_idx == len(shuffled):
+        raise ValueError("train_ratio must leave at least one subject in each partition")
     train_subjects = set(shuffled[:split_idx].tolist())
 
     train_records: List[int] = []

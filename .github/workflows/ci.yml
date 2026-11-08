@@ -12,7 +12,7 @@ on:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     strategy:
       fail-fast: false
@@ -28,6 +28,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
+        id: dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
@@ -45,7 +46,7 @@ jobs:
           mypy src/ api/ || true
 
       - name: Run pytest with coverage
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: |
           pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing
 

@@ -1,0 +1,40 @@
+name: Public demo source check
+
+on:
+  pull_request:
+    paths: ["demo/**", "api/explorer.html", "reports/research/**", ".github/workflows/demo-check.yml"]
+  push:
+    branches: [main]
+    paths: ["demo/**", "api/explorer.html", "reports/research/**", ".github/workflows/demo-check.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  static-demo:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install demo generator dependency
+        run: python -m pip install numpy==2.2.6
+      - name: Regenerate and check for stale measured data or template changes
+        run: |
+          python demo/build.py
+          git diff --exit-code -- demo/index.html
+      - name: Check embedded JavaScript syntax and absence of inference requests
+        run: |
+          python - <<'PY'
+          import pathlib, re
+          page = pathlib.Path("demo/index.html").read_text()
+          scripts = re.findall(r"<script>(.*?)</script>", page, flags=re.S)
+          assert scripts
+          assert "fetch(" not in "".join(scripts), "The public demo must not transmit beat samples"
+          pathlib.Path("/tmp/ecg-demo-check.js").write_text("\n".join(scripts))
+          PY
+          node --check /tmp/ecg-demo-check.js
