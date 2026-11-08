@@ -29,13 +29,6 @@ except ImportError:
     TORCH_AVAILABLE = False
     warnings.warn("PyTorch not available. CNN training disabled.")
 
-try:
-    import mlflow
-
-    MLFLOW_AVAILABLE = True
-except ImportError:
-    MLFLOW_AVAILABLE = False
-
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,

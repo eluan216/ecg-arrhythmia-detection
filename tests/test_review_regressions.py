@@ -52,9 +52,7 @@ def test_cnn_api_receives_same_samples_as_training(monkeypatch):
     monkeypatch.setattr(api, "_device", "cpu")
     beat = np.linspace(-2, 4, 250)
     result = api._predict_cnn(beat)
-    np.testing.assert_array_equal(
-        captured[0][0, 0], normalize_cnn_beats(beat[None, :])[0]
-    )
+    np.testing.assert_array_equal(captured[0][0, 0], normalize_cnn_beats(beat[None, :])[0])
     assert len(result.probabilities) == 5
 
 
@@ -77,7 +75,8 @@ def test_cnn_uses_fixed_epochs_without_test_checkpoint_selection(tmp_path, monke
     test = rng.normal(size=(4, 250)).astype(np.float32)
     monkeypatch.setattr(train_cnn, "ECG1DCNN", TinyModel)
     monkeypatch.setattr(
-        train_cnn, "load_or_generate_data",
+        train_cnn,
+        "load_or_generate_data",
         lambda **kwargs: (train, np.arange(10) % 5, test, np.zeros(4, dtype=int)),
     )
     metrics = train_cnn.train_cnn(output_dir=str(tmp_path), num_epochs=6, batch_size=10)
