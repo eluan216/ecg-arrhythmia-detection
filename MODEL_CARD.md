@@ -43,7 +43,7 @@ The historical RF report records 35.83% macro-F1 and 94.79% accuracy on 20,934
 test beats. S/F/Q performance is poor; F/Q have only 7/4 test beats.
 See [the original report](reports/mitbih/2026-11-05/full_report.json).
 
-New comparisons are measured only when the research workflow succeeds.
+The [8 November measured report](reports/research/2026-11-08/) records the validation-selected CNN, RF/RR ablation, noise testing and frozen INCART evaluation. The modest RR point-estimate gain has overlapping uncertainty intervals; the CNN underperforms the morphology RF. No clinically reliable classifier is claimed.
 Each bundle includes a comparison, class supports, confusion matrices,
 patient-cluster bootstrap intervals, timings and environment/data provenance.
 The interval is conditional on the cohort and model; it does not quantify

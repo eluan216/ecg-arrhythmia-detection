@@ -31,6 +31,10 @@ RR features are previous RR in seconds, previous RR divided by the mean of up to
 ten completed intervals, and that historical mean. The first beat has zeros.
 Intervals use accepted reference beats, so missed detections in a real system
 would introduce an additional source of error. No next-beat interval is used.
+The centered waveform itself includes about 347 ms after the reference location;
+this is not a zero-lookahead streaming detector. Shared research windows are
+stored as float32, unlike the historical float64 RF loader, so the new morphology
+baseline can differ slightly from the archived result.
 
 Outputs in `artifacts/research/`:
 

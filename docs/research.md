@@ -32,26 +32,37 @@ These notes distinguish implemented corrections from experiments still needed.
 ## Existing evidence and limitations
 
 The checked-in RF report remains historical evidence: 35.83% macro-F1,
-94.79% accuracy, 20,934 test beats. No RF retraining or performance improvement
-is claimed by these changes. The report uses the custom 45-record cohort,
+94.79% accuracy, 20,934 test beats. This initial review preserved that report; subsequent experiments are documented in the update below. The report uses the custom 45-record cohort,
 including paced record 217; it is not a standard 44-record DS1/DS2 benchmark.
 
 The old CNN checkpoint-selection path cannot support an unbiased test estimate.
-No corrected CNN score is claimed until training is rerun.
+Corrected validation-selected CNN measurements are now linked below.
 
 Other review findings remain follow-up work:
 
 - Baseline training helpers also skip failed records; use the strict evaluation runner for published results.
 - Cached NPZ inputs do not encode sufficient provenance to prove subject independence or synthetic origin.
-- Model loading does not enforce feature-version metadata compatibility; use artifacts from this code and matching environments.
+- New manifest-backed bundles enforce integrity and feature/environment checks; legacy weights still require trusted, compatible files.
 - Older orchestration/setup helpers and stage reports contain historical assumptions.
-- A lead-aware protocol, RR context, calibrated probabilities, patient-level uncertainty and external validation need separate measured experiments.
+- A consistent lead protocol and calibrated probabilities remain follow-up work. RR, uncertainty and external evaluation are covered by the new suite.
 - Once this holdout has influenced future design choices, it is a development benchmark; a new external test cohort is needed for independent final claims.
 
-## Suggested next experiment
+## Initial suggested experiment (now implemented below)
 
 Freeze an outer test cohort, split only training subjects into training and
 validation, compare morphology with morphology plus RR features, and select
 parameters using validation macro-F1. Keep natural test prevalence, report all
 class supports and evaluate uncertainty by resampling subjects rather than
 individual beats. Publish a new report with code, split, data hashes and versions.
+
+
+
+## Implemented research update
+
+The [measured 8 November reports](../reports/research/2026-11-08/) now include
+RF morphology versus morphology-plus-RR, validation-selected CNN, patient-cluster
+bootstrap intervals, timings, NSTDB stress testing and full INCART evaluation.
+See [the experiment guide](experiments.md) for sources and exact contracts.
+INCART annotations outside signal boundaries are explicitly excluded and audited.
+The explorer, model card, CPU container smoke test and model-bundle verification
+make those results inspectable and reproducible. They do not establish clinical utility.

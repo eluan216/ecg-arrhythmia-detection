@@ -1,0 +1,12 @@
+{
+  "source_commit": "f42672ad6c1e1fbce168ead70a209aae7c515065",
+  "workflow_run_id": 42501181042,
+  "workflow_url": "https://github.com/eluan216/ecg-arrhythmia-detection/actions/runs/42501181042",
+  "artifact_id": 13625398463,
+  "artifact_url": "https://github.com/eluan216/ecg-arrhythmia-detection/actions/runs/42501181042/artifacts/13625398463",
+  "artifact_archive_sha256": "cab28aced2dbaf5c7770116756249e505bab5c7d3a34c95beccec7f1476897e8",
+  "artifact_expires_at": "2026-12-08T16:53:47Z",
+  "bundle_manifest_sha256": "4ac49dc9be98a5fcafdf313735e86fccbb85b4d98998b6d020e395305cbbb0f1",
+  "environment_constraints": "constraints-research.txt",
+  "scope": "Measured research results, not clinical validation"
+}

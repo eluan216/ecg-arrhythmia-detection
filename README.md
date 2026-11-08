@@ -20,6 +20,12 @@ See my [model card](MODEL_CARD.md) for the intended users and limits.
 
 ![ECG explorer with clearly labeled synthetic examples](docs/assets/explorer.png)
 
+<details><summary>Watch the explorer demo (synthetic examples)</summary>
+
+![Recorded class filtering in the explorer](docs/assets/explorer-demo.gif)
+
+</details>
+
 Run `uvicorn api.main:app --reload` and open
 `http://localhost:8000/explorer`. The explorer works offline with labeled synthetic
 fixtures. Point `ECG_MODEL_DIR` at a completed research bundle to browse curated
@@ -45,7 +51,21 @@ See the [experiment guide](docs/experiments.md) for the fixed environment, compl
 commands and reporting assumptions, and [release instructions](docs/releasing.md)
 for artifact verification. The historical RF results below remain separately identified.
 
-## What I have measured
+## Latest measured research results
+
+I ran the [complete research workflow](https://github.com/eluan216/ecg-arrhythmia-detection/actions/runs/42501181042) on 8 November 2026. The comparison uses the same outer patient split, validation-only CNN epoch selection and a causal RR-feature ablation.
+
+| Model | MIT-BIH macro-F1 |
+| --- | --- |
+| RF morphology | 35.66% |
+| RF morphology + RR | 37.28% |
+| CNN | 30.52% |
+
+The RR gain is modest and uncertainty intervals overlap. The CNN performs worse; all three models remain weak on minority classes. I also evaluated noise robustness and frozen-model transfer to all 75 INCART records. These results support research error analysis, not clinical deployment.
+
+See [the measured reports, uncertainty and figures](reports/research/2026-11-08/). The historical RF experiment below is preserved separately.
+
+## Historical RF result — 5 November 2026
 
 [Full evaluation run](https://github.com/eluan216/ecg-arrhythmia-detection/actions/runs/42090136918)
 · [Measured report](reports/mitbih/2026-11-05/full_report.json)
@@ -66,7 +86,6 @@ provided by the dataset annotations; this does not measure R-peak detection.
 | Model | Macro-F1 | Weighted-F1 | Accuracy | 5-fold GroupKFold macro-F1 |
 |-------|----------|-------------|----------|----------------------------|
 | Random Forest (200 trees) | 35.83% | 94.96% | **94.79%** | 28.61% ± 4.02 percentage points |
-| 1D-CNN (raw windows) | *run `--from-patient-split` to measure* | — | — | — |
 
 The model and seed were fixed before this run. Cross-validation uses training
 subjects only; the held-out set was used for final reporting, not model selection.
