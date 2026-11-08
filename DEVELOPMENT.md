@@ -41,3 +41,16 @@ Explain changes to data selection, lead policy, preprocessing, class order and
 metrics. Add regression coverage for behavior changes. Keep synthetic results
 separate from real-data evidence and do not overwrite historical reports with
 new results. See [research notes](docs/research.md) for the current limitations.
+
+
+## Research and explorer
+
+The [experiment guide](docs/experiments.md) documents the fixed Python 3.11
+scientific environment, validation-only model selection and external evaluation.
+The explorer is served at `/explorer` by the same FastAPI process.
+Its static HTML is included in Python packages and the Docker image.
+
+MLflow is optional (`pip install -e ".[tracking]"`); it is not required by
+the supported JSON-based experiment suite. Torchvision is not used.
+Research bundles verify hashes and feature/environment compatibility before loading.
+The RR model is an offline ablation and must not replace the API's morphology model.

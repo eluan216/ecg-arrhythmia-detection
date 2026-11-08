@@ -78,7 +78,7 @@ function draw(){
  current.signal.forEach((v,i)=>{const x=left+i/(current.signal.length-1)*(right-left),y=bottom-(v-min)/(max-min)*(bottom-top);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();
 }
 function select(){
- current=filtered[Number($('sample').value)];if(!current){$('status').textContent='No examples match these filters.';$('predictions').replaceChildren();return}
+ current=filtered[Number($('sample').value)];if(!current){$('status').textContent='No examples match these filters.';$('predictions').replaceChildren();$('beatTitle').textContent='No matching examples';const canvas=$('wave');canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);return}
  $('status').textContent='';$('metadata').textContent=current.id;
  $('beatTitle').textContent='Reference: '+(current.reference||'unlabeled')+' · '+current.signal.length+' samples';
  showPredictions(current.predictions);draw();

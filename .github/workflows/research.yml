@@ -1,13 +1,16 @@
 name: Reproducible research experiments
 
 on:
-  pull_request:
+  push:
+    branches: [main, "improve/**"]
     paths:
       - "src/data/research.py"
       - "src/eval/research_suite.py"
       - "src/eval/external.py"
       - "src/models/artifacts.py"
-      - ".github/workflows/research.yml"
+      - "src/eval/statistics.py"
+      - "src/data/segment.py"
+      - "src/models/cnn_pytorch.py"
       - "constraints-research.txt"
   workflow_dispatch:
 

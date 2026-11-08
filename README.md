@@ -6,6 +6,45 @@ My focus is reproducible evaluation: keeping patients separate, reporting minori
 
 **Research and education only. This is not a medical device or a tool for clinical decisions.**
 
+## What this project provides
+
+I built a research baseline for comparing ECG beat classifiers on unseen patients,
+an explorer for inspecting waveforms and model errors, and an API prototype for
+integrating already segmented beats into an application.
+
+The practical value is reproducible experimentation and transparent error analysis.
+It does not provide patient screening, continuous ECG monitoring or clinical diagnosis.
+See my [model card](MODEL_CARD.md) for the intended users and limits.
+
+## Explore the project
+
+![ECG explorer with clearly labeled synthetic examples](docs/assets/explorer.png)
+
+Run `uvicorn api.main:app --reload` and open
+`http://localhost:8000/explorer`. The explorer works offline with labeled synthetic
+fixtures. Point `ECG_MODEL_DIR` at a completed research bundle to browse curated
+held-out MIT-BIH examples, compare reference/model labels and filter errors.
+You can also inspect a local 250-sample CSV and request predictions from loaded models.
+
+## Reproducible research suite
+
+```bash
+python -m src.eval.research_suite --download --epochs 10 --bootstrap 200
+```
+
+I compare a morphology RF, a morphology-plus-RR RF, and a CNN using the same outer
+patient split. CNN epoch selection uses validation subjects from training patients
+only, followed by refitting. Reports include per-class scores, patient-bootstrap
+intervals, training time, inference throughput, data hashes and model bundles.
+
+I also provide frozen-model noise evaluation on NSTDB, excluding overlapping clean
+source patients, and external evaluation on all 75 INCART records with explicit
+lead selection and resampling. These are research checks, not clinical validation.
+
+See the [experiment guide](docs/experiments.md) for the fixed environment, complete
+commands and reporting assumptions, and [release instructions](docs/releasing.md)
+for artifact verification. The historical RF results below remain separately identified.
+
 ## What I have measured
 
 [Full evaluation run](https://github.com/eluan216/ecg-arrhythmia-detection/actions/runs/42090136918)
@@ -115,7 +154,7 @@ python -m src.train.train_cnn \
 
 I use per-beat z-score normalization in both training and inference. Training now uses a fixed final epoch and evaluates the test set once after training; it does not choose checkpoints using test scores. Macro-F1 includes all five classes, including classes absent from a particular test batch or cohort.
 
-I have not published a measured inter-patient CNN result. Earlier CNN training code selected a checkpoint using the test set; any metrics from that path require a fresh run. Future tuning needs a separate validation partition drawn only from training subjects.
+Earlier CNN training code selected a checkpoint using the test set; metrics from that path require a fresh run. The new research suite uses a separate training-subject validation partition. Its results are documented separately from the historical RF table.
 
 ## Serve a trained model
 
@@ -152,11 +191,15 @@ docker run --rm -p 8000:8000 \
 
 The image contains application code; model artifacts are supplied at runtime.
 
-## What I want to improve next
+## Remaining research questions
 
-My current baseline struggles with S, F and Q. I want to evaluate rhythm context and RR intervals, compare models using training-subject validation, quantify uncertainty across subjects, and test robustness to noise and different acquisition devices. Those are planned experiments, not measured improvements.
+My historical baseline struggles with S, F and Q. The new suite tests rhythm context,
+CNN comparison, uncertainty and robustness explicitly. Whether these changes improve
+performance must be established by measured reports.
 
-This project classifies annotated beats rather than detecting arrhythmia episodes or performing end-to-end R-peak detection. Its small, historical cohort and rare-class supports limit generalization. Model probabilities have not been clinically calibrated.
+Independent prospective validation, calibration, subgroup analysis and end-to-end
+beat detection remain future work. The existing holdout has informed development,
+so it is a development benchmark. I do not claim clinical readiness.
 
 ## Repository guide
 
@@ -170,12 +213,15 @@ This project classifies annotated beats rather than detecting arrhythmia episode
 | `api/` | FastAPI inference service |
 | `tests/` | Unit and regression tests |
 | `reports/mitbih/` | Measured results and frozen split |
+| [Model card](MODEL_CARD.md) | Intended use, evidence and limitations |
+| [Experiment guide](docs/experiments.md) | RF/CNN, RR ablation, robustness and external validation |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Development commands and troubleshooting |
 | [Research notes](docs/research.md) | Sources, review findings and methodological decisions |
 | [Historical notes](docs/archive/) | Earlier implementation summaries |
 
 ## Sources and credits
 
-I use [MIT-BIH Arrhythmia Database v1.0.0](https://physionet.org/content/mitdb/1.0.0/) by George Moody and Roger Mark (2005), DOI [10.13026/C2F305](https://doi.org/10.13026/C2F305). See its page for dataset terms and citation requirements. My code is released under the [MIT license](LICENSE).
+I use [MIT-BIH Arrhythmia Database v1.0.0](https://physionet.org/content/mitdb/1.0.0/) by George Moody and Roger Mark (2005), DOI [10.13026/C2F305](https://doi.org/10.13026/C2F305). See its page for dataset terms and citation requirements. NSTDB and INCART are downloaded separately under their respective dataset terms. My code is released under the [MIT license](LICENSE).
 
 **Oguma Eluanatein Odo** · [GitHub](https://github.com/eluan216) · [LinkedIn](https://linkedin.com/in/eluanatein-oguma-5552571b6)
+
