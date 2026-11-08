@@ -1,5 +1,11 @@
 # ECG Arrhythmia Detection
 
+**[Open the public browser demo →](https://ecg-arrhythmia-detection.vercel.app)**
+
+No installation required: explore synthetic waveforms, plot a local beat CSV
+privately, and inspect the measured model comparisons and confusion matrices.
+For trained-model inference, use the local API instructions below.
+
 I built this project to study how ECG beat classifiers generalize to people they have not seen during training. I use the MIT-BIH Arrhythmia Database, a morphology-based Random Forest baseline, and a compact PyTorch CNN, with a FastAPI service for inference.
 
 My focus is reproducible evaluation: keeping patients separate, reporting minority-class failures, and making the data and model assumptions visible.
