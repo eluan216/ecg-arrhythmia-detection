@@ -18,33 +18,52 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from src.data.download import MITBIH_RECORDS_FILTERED, download_mitbih
 from src.data.research import load_mitbih
-from src.data.segment import AAMI_CLASSES, FEATURE_DIM, FEATURE_VERSION, normalize_cnn_beats
+from src.data.segment import (
+    AAMI_CLASSES,
+    FEATURE_DIM,
+    FEATURE_VERSION,
+    normalize_cnn_beats,
+)
+from src.eval.protocols import (
+    class_support,
+    fixed_partition,
+    nsv_focus,
+    shared_subjects,
+)
 from src.eval.statistics import metrics, subject_bootstrap
 from src.models.artifacts import sha256, write_bundle
 from src.models.cnn_pytorch import ECG1DCNN
 
 
-def validate_partition(split):
-    from src.data.segment import subject_id_for_record
+def validate_partition(split, protocol="custom"):
 
     train = [int(r) for r in split["train_records"]]
     test = [int(r) for r in split["test_records"]]
     if not train or not test or len(set(train + test)) != len(train + test):
         raise ValueError("Split must contain non-empty, unique train/test records")
-    if set(train + test) != set(MITBIH_RECORDS_FILTERED):
-        raise ValueError("Split must cover the complete declared 45-record cohort")
-    if {subject_id_for_record(r) for r in train} & {subject_id_for_record(r) for r in test}:
+    expected = (
+        set(MITBIH_RECORDS_FILTERED)
+        if protocol == "custom"
+        else {r for records in fixed_partition(protocol) for r in records}
+    )
+    if protocol != "custom" and (train, test) != fixed_partition(protocol):
+        raise ValueError("Fixed partition must match the declared protocol exactly")
+    if set(train + test) != expected:
+        raise ValueError("Split must cover the complete declared cohort")
+    if shared_subjects(train, test) and protocol != "ds1-ds2":
         raise ValueError("Subject overlap in frozen split")
     return train, test
 
 
-def train_cnn_epochs(windows, labels, epochs, *, validation=None, seed=42):
+def train_cnn_epochs(
+    windows, labels, epochs, *, validation=None, seed=42, normalizer=normalize_cnn_beats
+):
     """Select an epoch using validation subjects only, or train a fixed epoch count."""
     torch.manual_seed(seed)
     model = ECG1DCNN().cpu()
     loader = DataLoader(
         TensorDataset(
-            torch.from_numpy(normalize_cnn_beats(windows)),
+            torch.from_numpy(normalizer(windows)),
             torch.from_numpy(np.asarray(labels, dtype=np.int64)),
         ),
         batch_size=256,
@@ -69,7 +88,7 @@ def train_cnn_epochs(windows, labels, epochs, *, validation=None, seed=42):
             total_loss += float(loss.detach()) * len(target)
         row = {"epoch": epoch, "training_loss": total_loss / len(labels)}
         if validation is not None:
-            proba = cnn_probabilities(model, validation.windows)
+            proba = cnn_probabilities(model, validation.windows, normalizer=normalizer)
             score = f1_score(
                 validation.labels,
                 proba.argmax(axis=1),
@@ -85,12 +104,12 @@ def train_cnn_epochs(windows, labels, epochs, *, validation=None, seed=42):
     return model, selected_epoch, history
 
 
-def cnn_probabilities(model, windows):
+def cnn_probabilities(model, windows, *, normalizer=normalize_cnn_beats):
     model.eval()
     result = []
     with torch.inference_mode():
         for start in range(0, len(windows), 512):
-            beats = torch.from_numpy(normalize_cnn_beats(windows[start : start + 512]))
+            beats = torch.from_numpy(normalizer(windows[start : start + 512]))
             result.append(torch.softmax(model(beats.unsqueeze(1)), dim=1).cpu().numpy())
     return np.concatenate(result)
 
@@ -99,6 +118,7 @@ def report_model(y, proba, groups, elapsed, inference_seconds, bootstrap):
     predictions = proba.argmax(axis=1)
     return {
         **metrics(y, predictions),
+        "nsv_focus": nsv_focus(y, predictions),
         "macro_f1_interval": subject_bootstrap(y, predictions, groups, bootstrap),
         "training_seconds": elapsed,
         "batch_inference_ms_per_beat": 1000 * inference_seconds / len(y),
@@ -119,12 +139,19 @@ def run(args):
     torch.use_deterministic_algorithms(True)
     output = Path(args.output_dir)
     if (output / "manifest.json").exists():
-        raise FileExistsError("Choose a new output directory; completed bundles are immutable")
+        raise FileExistsError(
+            "Choose a new output directory; completed bundles are immutable"
+        )
     output.mkdir(parents=True, exist_ok=True)
     if args.download:
         download_mitbih(args.data_dir)
-    split = json.loads(Path(args.split).read_text(encoding="utf-8"))
-    train_records, test_records = validate_partition(split)
+    protocol_name = getattr(args, "protocol", "custom")
+    if protocol_name == "custom":
+        split = json.loads(Path(args.split).read_text(encoding="utf-8"))
+    else:
+        tr, te = fixed_partition(protocol_name)
+        split = {"train_records": tr, "test_records": te}
+    train_records, test_records = validate_partition(split, protocol_name)
     train = load_mitbih(args.data_dir, train_records)
     test = load_mitbih(args.data_dir, test_records)
     inner_train, validation = next(
@@ -135,7 +162,19 @@ def run(args):
     fit, val = train.subset(inner_train), train.subset(validation)
     protocol = {
         "dataset": "mitbih",
-        "cohort": "custom-45-record",
+        "cohort": "custom-45-record" if protocol_name == "custom" else protocol_name,
+        "record_split": protocol_name,
+        "shared_train_test_subjects": shared_subjects(train_records, test_records),
+        "subject_disjoint": not bool(shared_subjects(train_records, test_records)),
+        "class_support": {
+            name: class_support(data)
+            for name, data in [
+                ("train", train),
+                ("inner_train", fit),
+                ("validation", val),
+                ("test", test),
+            ]
+        },
         "seed": 42,
         "train_records": train_records,
         "test_records": test_records,
@@ -168,12 +207,17 @@ def run(args):
     ]:
         started = time.perf_counter()
         classifier = RandomForestClassifier(
-            n_estimators=200, class_weight="balanced_subsample", random_state=42, n_jobs=2
+            n_estimators=200,
+            class_weight="balanced_subsample",
+            random_state=42,
+            n_jobs=2,
         )
         classifier.fit(fit.features(rhythm), fit.labels)
         val_pred = classifier.predict(val.features(rhythm))
         validation_score = float(
-            f1_score(val.labels, val_pred, labels=range(5), average="macro", zero_division=0)
+            f1_score(
+                val.labels, val_pred, labels=range(5), average="macro", zero_division=0
+            )
         )
         classifier.fit(train.features(rhythm), train.labels)
         training_seconds = time.perf_counter() - started
@@ -181,7 +225,12 @@ def run(args):
         proba = aligned_rf_probabilities(classifier, test.features(rhythm))
         inference_seconds = time.perf_counter() - started
         results[name] = report_model(
-            test.labels, proba, test.groups, training_seconds, inference_seconds, args.bootstrap
+            test.labels,
+            proba,
+            test.groups,
+            training_seconds,
+            inference_seconds,
+            args.bootstrap,
         )
         results[name]["validation_macro_f1"] = validation_score
         probabilities[name] = proba
@@ -193,7 +242,7 @@ def run(args):
                 "feature_dim": FEATURE_DIM,
                 "classes": AAMI_CLASSES,
                 "dataset_type": "mitbih",
-                "protocol": "inter-patient",
+                "protocol": protocol_name,
             },
             indent=2,
         ),
@@ -240,7 +289,9 @@ def run(args):
                         "predictions": {
                             name: {
                                 "predicted_class": AAMI_CLASSES[int(p[i].argmax())],
-                                "probabilities": dict(zip(AAMI_CLASSES, map(float, p[i]))),
+                                "probabilities": dict(
+                                    zip(AAMI_CLASSES, map(float, p[i]))
+                                ),
                             }
                             for name, p in probabilities.items()
                         },
@@ -258,17 +309,22 @@ def run(args):
         encoding="utf-8",
     )
     report = {"protocol": protocol, "models": results, "class_labels": AAMI_CLASSES}
-    (output / "comparison.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    (output / "comparison.json").write_text(
+        json.dumps(report, indent=2), encoding="utf-8"
+    )
     lines = [
         "# Measured research comparison",
         "",
-        "| Model | Macro-F1 | 95% patient bootstrap interval | Accuracy |",
-        "| --- | --- | --- | --- |",
+        "Five-class AAMI mapping; N/V/S focus is conditional evaluation of the same model.",
+        f"Record protocol: {protocol_name}; shared train/test subjects: {shared_subjects(train_records, test_records)}.",
+        "",
+        "| Model | Five-class macro-F1 | N/V/S focus macro-F1 | 95% patient bootstrap interval (five-class) | Accuracy |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for name, result in results.items():
         ci = result["macro_f1_interval"]
         lines.append(
-            f"| {name} | {result['macro_f1']:.4f} | "
+            f"| {name} | {result['macro_f1']:.4f} | {result['nsv_focus']['macro_f1']:.4f} | "
             f"{ci['lower']:.4f}–{ci['upper']:.4f} | {result['accuracy']:.4f} |"
         )
     (output / "RESULTS.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -279,8 +335,15 @@ def run(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--protocol",
+        choices=["custom", "ds1-ds2", "ds1-ds2-disjoint"],
+        default="custom",
+    )
     parser.add_argument("--data-dir", default="data/raw")
-    parser.add_argument("--split", default="reports/mitbih/2026-11-05/patient_split.json")
+    parser.add_argument(
+        "--split", default="reports/mitbih/2026-11-05/patient_split.json"
+    )
     parser.add_argument("--output-dir", default="artifacts/research")
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--bootstrap", type=int, default=200)

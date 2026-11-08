@@ -113,3 +113,68 @@ and the explorer with an explicitly synthetic smoke-test model.
 - [INCART sampling, leads and cohort](https://physionet.org/content/incartdb/1.0.0/).
 - [GroupShuffleSplit](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GroupShuffleSplit.html).
 - [SciPy polyphase resampling](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.resample_poly.html).
+
+## Review follow-up: task scope, record protocols and CNN diagnosis
+
+The original labels already use the five AAMI groups N/V/S/F/Q. Reordering them
+does not change F1. Seven F and four Q **test** beats indicate unstable evaluation,
+not the number of training examples. Reports now include beat counts and contributing
+subject counts for training, inner training, validation and test, for every class.
+
+Five-class macro-F1 remains the primary result, including zero-F1 classes.
+A secondary N/V/S focus metric evaluates only reference N/V/S beats using the same
+five-class classifier. It excludes reference F/Q, reports how many were excluded,
+and counts predictions of F/Q on retained beats as errors. This is a conditional
+evaluation, not a retrained three-class model or an AAMI compliance claim.
+F/Q must not be relabeled as normal or silently merged into an ectopic class.
+Compare like-for-like tasks; a higher conditional score is not a five-class gain.
+
+### Published record split and subject-disjoint sensitivity check
+
+```bash
+python -m src.eval.research_suite --download --protocol ds1-ds2 --output-dir artifacts/ds1-ds2
+python -m src.eval.research_suite --protocol ds1-ds2-disjoint --output-dir artifacts/ds1-ds2-disjoint
+python -m src.eval.protocol_comparison
+```
+
+Run the default custom experiment first for the three-column summary.
+The fixed 44-record DS1/DS2 protocol excludes 102, 104, 107 **and 217**.
+Its record lists are explicit in `src/eval/protocols.py`. The published split puts
+201 in DS1 and 202 in DS2. PhysioNet identifies these as the same subject, so this
+arm is record-disjoint, **not strictly subject-disjoint**. The separate
+`ds1-ds2-disjoint` sensitivity arm removes 201 from training (43 total records)
+and retains DS2 unchanged. It is explicitly a variant, not the published split.
+
+Both arms retain the existing channel-0, 250-sample, reference-centered pipeline,
+class mapping, fixed seeds, validation-only epoch selection and five-class metric.
+A matching record split improves comparison but does not reproduce papers using
+different leads, annotations, training budgets, mappings or class universes.
+Published-split bootstrap intervals are conditional on a model with known shared
+subject exposure; they do not eliminate that limitation.
+
+The workflow produces `artifacts/protocol-comparison.md` plus independent bundles.
+No new DS1/DS2 scores are claimed until those experiments finish successfully.
+
+Sources:
+[DS1/DS2 record lists in an original research paper](https://ieeexplore.ieee.org/ielx7/4156126/9770853/09669005.pdf)
+and [PhysioNet record notes](https://physionet.org/physiobank/database/html/mitdbdir/records.htm).
+
+### CNN normalization/window diagnostic
+
+```bash
+python -m src.eval.cnn_diagnostics --epochs 10
+```
+
+This reads **outer training records only**. Six predeclared arms cross
+250/360/500-sample centered windows with per-beat z-score or unnormalized physical
+mV, using identical beats, fit/validation subjects, seed, architecture, optimizer,
+loss and epoch budget. Results include every epoch, not just the winning score.
+No model is exported or promoted to the API. Inspect validation support and
+learning curves before making a new experimental choice.
+
+The measured CNN already uses per-beat z-score in training and inference.
+RF feature standardization is not required for tree split thresholds.
+The deficit could involve normalization, window context, optimization, class
+weighting, architecture or patient shift; a low score alone establishes none of
+these causes. Any change selected from this diagnostic requires a separately
+documented evaluation. The custom holdout has already informed development.
