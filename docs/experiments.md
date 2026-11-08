@@ -78,6 +78,9 @@ reference sample locations, and evaluates frozen morphology RF/CNN weights.
 It does not select models or fit anything to external labels. Repeated records
 share patients; the report gives pooled metrics without pretending records are
 independent patients. Label availability and reference alignment differ from MIT-BIH.
+Mapped annotations outside the signal are excluded explicitly and recorded with
+their original sample locations in the report's per-record annotation audit.
+The default MIT-BIH loader remains strict about boundaries and sampling rate.
 
 ## Figures and explorer
 

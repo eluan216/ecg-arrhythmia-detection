@@ -51,14 +51,21 @@ def run(args):
     cnn = ECG1DCNN()
     cnn.load_state_dict(torch.load(bundle / "cnn_model.pth", map_location="cpu", weights_only=True))
     root = Path(args.data_dir)
-    datasets, report = {}, {}
+    datasets, report = {}, {"annotation_audit": {}}
     if args.dataset == "nstdb":
         records = nstdb_records(manifest["protocol"]["train_records"])
         if args.download:
             ensure_files("nstdb", root, [r for r, _, _ in records])
         for record, source, snr in records:
             datasets.setdefault(snr, []).append(
-                read_annotated_record(root / record, record, source, noisy_only=True)
+                read_annotated_record(
+                    root / record,
+                    record,
+                    source,
+                    noisy_only=True,
+                    expected_fs=360,
+                    audit=report["annotation_audit"],
+                )
             )
         report["scope"] = (
             "Noise-on beat centers only, 5 minutes onward, alternating 2-minute intervals. "
@@ -70,12 +77,24 @@ def run(args):
         records = [f"I{i:02d}" for i in range(1, 76)]
         if args.download:
             ensure_files("incartdb", root, records)
-        datasets["all"] = [read_annotated_record(root / r, r, r, lead="II") for r in records]
+        datasets["all"] = [
+            read_annotated_record(
+                root / r,
+                r,
+                r,
+                lead="II",
+                expected_fs=257,
+                drop_outside=True,
+                audit=report["annotation_audit"],
+            )
+            for r in records
+        ]
         report["scope"] = (
             "All 75 INCART records, lead II in mV, polyphase-resampled 257 to 360 Hz. "
             "Reference locations are rounded after resampling; labels use the shared whitelist. "
             "Frozen MIT-BIH models; no fitting. Repeated records share patients: "
-            "pooled beat metrics only, no record-as-patient bootstrap."
+            "pooled beat metrics only, no record-as-patient bootstrap. "
+            "Annotations outside signal boundaries are excluded and individually audited."
         )
         report["records"] = records
     report.update(

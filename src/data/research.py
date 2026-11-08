@@ -54,9 +54,21 @@ def causal_rr_features(samples, fs):
     return features
 
 
-def read_annotated_record(base, record_id, group, *, lead=None, noisy_only=False):
+def read_annotated_record(
+    base,
+    record_id,
+    group,
+    *,
+    lead=None,
+    noisy_only=False,
+    drop_outside=False,
+    audit=None,
+    expected_fs=None,
+):
     """Read physical mV, resample before segmentation, and map accepted beat labels."""
     record = wfdb.rdrecord(str(base))
+    if expected_fs is not None and record.fs != expected_fs:
+        raise ValueError(f"{record_id}: expected {expected_fs} Hz, got {record.fs}")
     ann = wfdb.rdann(str(base), "atr")
     channel = 0 if lead is None else record.sig_name.index(lead)
     if record.units[channel].lower() != "mv":
@@ -73,8 +85,21 @@ def read_annotated_record(base, record_id, group, *, lead=None, noisy_only=False
         raise ValueError(f"{record_id}: no mapped beats")
     original = np.asarray([s for s, _ in accepted])
     samples = np.rint(original * EXPECTED_FS_HZ / record.fs).astype(np.int64)
-    if np.any(samples < 0) or np.any(samples >= len(signal)):
+    valid = (samples >= 0) & (samples < len(signal))
+    if not valid.all() and not drop_outside:
         raise ValueError(f"{record_id}: annotations outside the recording")
+    if audit is not None:
+        audit[str(record_id)] = {
+            "mapped_annotations": len(accepted),
+            "outside_recording_excluded": int((~valid).sum()),
+            "excluded_original_samples": original[~valid].tolist(),
+            "source_sampling_rate_hz": float(record.fs),
+            "unmapped_or_nonbeat_annotations": len(ann.sample) - len(accepted),
+        }
+    accepted = [item for item, keep in zip(accepted, valid) if keep]
+    original, samples = original[valid], samples[valid]
+    if not accepted:
+        raise ValueError(f"{record_id}: no mapped beats inside the recording")
     windows = np.stack([segment_beat_around_rpeak(signal, int(s)) for s in samples])
     labels = np.asarray([AAMI_CLASS_INDEX[c] for _, c in accepted], dtype=np.int64)
     data = BeatDataset(
@@ -107,5 +132,7 @@ def load_mitbih(data_dir, records):
         base = Path(data_dir) / str(rec)
         if not base.with_suffix(".hea").exists():
             base = Path(data_dir) / "mitdb" / str(rec)
-        datasets.append(read_annotated_record(base, rec, subject_id_for_record(int(rec))))
+        datasets.append(
+            read_annotated_record(base, rec, subject_id_for_record(int(rec)), expected_fs=360)
+        )
     return concatenate(datasets)

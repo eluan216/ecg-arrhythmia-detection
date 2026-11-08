@@ -107,3 +107,28 @@ def test_external_resampling_aligns_annotations(monkeypatch):
     assert data.samples.tolist() == [360, 720]
     assert data.windows.shape == (2, 250)
     assert data.labels.tolist() == [0, 1]
+
+
+def test_outside_annotations_require_explicit_audited_exclusion(monkeypatch):
+    record = SimpleNamespace(
+        sig_name=["II"],
+        units=["mV"],
+        fs=257,
+        p_signal=np.zeros((1000, 1)),
+    )
+    ann = SimpleNamespace(sample=np.array([-10, 257, 1001]), symbol=["N", "V", "S"])
+    monkeypatch.setattr(research.wfdb, "rdrecord", lambda *a: record)
+    monkeypatch.setattr(research.wfdb, "rdann", lambda *a: ann)
+    with pytest.raises(ValueError, match="outside"):
+        research.read_annotated_record("unused", "I04", "patient-1")
+    audit = {}
+    data = research.read_annotated_record(
+        "unused",
+        "I04",
+        "patient-1",
+        drop_outside=True,
+        audit=audit,
+    )
+    assert data.labels.tolist() == [1]
+    assert audit["I04"]["outside_recording_excluded"] == 2
+    assert audit["I04"]["excluded_original_samples"] == [-10, 1001]
