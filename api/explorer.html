@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ECG Research Explorer</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#e4edf6;background:#0a1320;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0}main{max-width:1180px;margin:auto;padding:36px 24px}
+header{display:flex;justify-content:space-between;gap:20px;align-items:center}
+h1{font-size:clamp(26px,4vw,40px);letter-spacing:-1px;margin:8px 0}h2{font-size:18px}
+p{color:#a7b9cd;line-height:1.65}a{color:#78d9cb}.eyebrow{font-size:12px;letter-spacing:2px;color:#73dfcb}
+.tag{display:inline-block;font-size:12px;padding:6px 10px;background:#18322f;color:#8de6d3;border-radius:20px}
+.notice{border-left:3px solid #d8ad63;padding:10px 16px;background:#211e19;color:#e8c997;margin:24px 0}
+.grid{display:grid;grid-template-columns:270px 1fr;gap:20px}.card{background:#101f30;border:1px solid #24364b;border-radius:14px;padding:22px}
+label{display:block;color:#b9ccdf;font-size:13px;margin-bottom:10px}
+select,button,input{width:100%;padding:12px;border:1px solid #40546a;border-radius:8px;background:#15283d;color:#f3f6fa;font:inherit}
+button{cursor:pointer;background:#80ddc9;color:#082821;font-weight:650;margin-top:12px}button:disabled{opacity:.5;cursor:wait}
+select{margin-bottom:18px}input[type=checkbox]{width:auto}canvas{width:100%;height:300px;display:block}
+.sub{font-size:12px;color:#97aec4}.predictions{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:20px}
+.prediction{padding:16px;background:#15283d;border-radius:10px}.big{font-size:30px;margin:8px 0}
+.bar{height:6px;background:#2c4057;border-radius:8px;margin:4px 0 9px}.fill{height:100%;background:#80ddc9;border-radius:8px}
+.classrow{display:flex;justify-content:space-between;font-size:12px}.error{color:#ffb5a8}.footer{margin-top:24px;font-size:13px}
+:focus-visible{outline:3px solid #f1c66b;outline-offset:3px}@media(max-width:760px){.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}canvas{height:230px}}
+</style>
+</head>
+<body><main>
+<header><div><div class="eyebrow">SIGNALS / MODELS / EVIDENCE</div><h1>ECG Research Explorer</h1>
+<p>Inspect individual beats, compare models, and understand where they fail.</p></div>
+<a href="/docs">API documentation ↗</a></header>
+<div class="notice">Research and education only. This prototype cannot diagnose a condition or guide treatment.</div>
+<div class="grid"><aside class="card">
+<h2>Explore a heartbeat</h2><span class="tag" id="source">Loading examples…</span>
+<p class="sub" id="selection"></p>
+<label for="classFilter">Reference class</label><select id="classFilter"><option value="">All classes</option>
+<option>N</option><option>V</option><option>S</option><option>F</option><option>Q</option></select>
+<label><input type="checkbox" id="errors"> Show model errors only</label>
+<label for="sample">Example</label><select id="sample"></select>
+<p id="metadata" class="sub"></p>
+<button id="predict">Run loaded models</button><p id="status" role="status" aria-live="polite" class="sub"></p>
+<hr><label for="upload">Or inspect a local beat CSV</label>
+<input id="upload" type="file" accept=".csv,.txt"><p class="sub">One column, 250 finite samples in mV at 360 Hz. File stays in your browser until you run a prediction on this server.</p>
+</aside><section>
+<div class="card"><div class="eyebrow">REFERENCE-CENTERED WINDOW · 360 HZ</div>
+<h2 id="beatTitle">Heartbeat waveform</h2><canvas id="wave" role="img" aria-label="ECG waveform: amplitude in millivolts over time in seconds"></canvas>
+<p class="sub">Time relative to reference beat (seconds) · Amplitude (mV)</p>
+<div id="predictions" class="predictions"></div></div>
+<div class="card" style="margin-top:20px"><h2>Read the evidence</h2>
+<p>N: normal-group beats · V: ventricular ectopic · S: supraventricular ectopic · F: fusion · Q: paced or unclassifiable.</p>
+<p>A high probability is a model score, not calibrated clinical confidence. The measured baseline's high accuracy hides poor performance on several minority classes. The curated examples here cannot estimate overall performance.</p>
+<p>Live inference supports the morphology RF and CNN. The RR ablation needs earlier beat timing and is available in measured comparisons only. Beat locations are supplied; R-peak detection is not evaluated.</p></div>
+</section></div><p class="footer">Built by Oguma Eluanatein Odo · <a href="https://github.com/eluan216/ecg-arrhythmia-detection">Source and reproducibility</a></p>
+</main>
+<script>
+const $=id=>document.getElementById(id);let dataset,filtered=[],current;
+function showPredictions(predictions){
+ const container=$('predictions');container.replaceChildren();
+ for(const [name,result] of Object.entries(predictions||{})){
+  const card=document.createElement('div');card.className='prediction';
+  const title=document.createElement('strong');title.textContent=name;card.append(title);
+  const predicted=document.createElement('div');predicted.className='big';predicted.textContent=result.predicted_class;card.append(predicted);
+  for(const c of ['N','V','S','F','Q']){
+   const value=result.probabilities[c]||0,row=document.createElement('div');row.className='classrow';
+   row.textContent=c+'  '+(value*100).toFixed(1)+'%';card.append(row);
+   const bar=document.createElement('div'),fill=document.createElement('div');bar.className='bar';fill.className='fill';
+   fill.style.width=(Math.max(0,Math.min(1,value))*100)+'%';bar.append(fill);card.append(bar);
+  }container.append(card);
+ }
+}
+function draw(){
+ if(!current)return;const canvas=$('wave'),ratio=window.devicePixelRatio||1;
+ const rect=canvas.getBoundingClientRect();canvas.width=rect.width*ratio;canvas.height=rect.height*ratio;
+ const ctx=canvas.getContext('2d');ctx.scale(ratio,ratio);const w=rect.width,h=rect.height;
+ let min=Math.min(...current.signal),max=Math.max(...current.signal);if(max-min<.01){min-=.5;max+=.5}
+ const left=48,right=w-12,top=18,bottom=h-34;ctx.strokeStyle='#24374b';ctx.fillStyle='#9bb0c6';ctx.font='11px system-ui';
+ for(let i=0;i<=4;i++){const y=top+(bottom-top)*i/4;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(right,y);ctx.stroke();ctx.fillText((max-(max-min)*i/4).toFixed(2),2,y+4)}
+ for(let i=0;i<=4;i++){const x=left+(right-left)*i/4;ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,bottom);ctx.stroke();ctx.fillText(((i/4*(current.signal.length-1)-125)/360).toFixed(2),x-14,h-10)}
+ ctx.strokeStyle='#80ddc9';ctx.lineWidth=2;ctx.beginPath();
+ current.signal.forEach((v,i)=>{const x=left+i/(current.signal.length-1)*(right-left),y=bottom-(v-min)/(max-min)*(bottom-top);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke();
+}
+function select(){
+ current=filtered[Number($('sample').value)];if(!current){$('status').textContent='No examples match these filters.';$('predictions').replaceChildren();return}
+ $('status').textContent='';$('metadata').textContent=current.id;
+ $('beatTitle').textContent='Reference: '+(current.reference||'unlabeled')+' · '+current.signal.length+' samples';
+ showPredictions(current.predictions);draw();
+}
+function filter(){
+ filtered=dataset.samples.filter(s=>(!$('classFilter').value||s.reference===$('classFilter').value)&&
+ (!$('errors').checked||Object.values(s.predictions||{}).some(p=>p.predicted_class!==s.reference)));
+ $('sample').replaceChildren();filtered.forEach((s,i)=>{const o=document.createElement('option');o.value=i;o.textContent=s.id;$('sample').append(o)});
+ $('predict').disabled=!filtered.length;select();
+}
+$('classFilter').onchange=filter;$('errors').onchange=filter;$('sample').onchange=select;window.onresize=draw;
+$('predict').onclick=async()=>{
+ if(!current)return;$('predict').disabled=true;$('status').textContent='Running available models…';const results={};
+ try{
+  for(const model of ['baseline','cnn']){
+   const response=await fetch('/predict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({signal:current.signal,sampling_rate:360,model})});
+   if(response.ok)results[model]=await response.json();
+   else if(response.status!==503)throw Error('Prediction failed: HTTP '+response.status);
+  }
+  showPredictions(results);$('status').textContent=Object.keys(results).length?'Live model scores shown.':'No models loaded. Train a bundle and set ECG_MODEL_DIR.';
+ }catch(e){$('status').textContent=e.message}finally{$('predict').disabled=false}
+};
+$('upload').onchange=async event=>{
+ const file=event.target.files[0];if(!file)return;
+ try{
+  const text=await file.text(),tokens=text.trim().split(/[\s,;]+/);
+  if(tokens.length!==250)throw Error('Provide exactly 250 samples without a header.');
+  const signal=tokens.map(Number);if(signal.some(x=>!Number.isFinite(x)))throw Error('All samples must be finite numbers.');
+  current={id:file.name,signal,predictions:{}};$('beatTitle').textContent='Local beat · no reference label';
+  $('metadata').textContent=file.name;$('status').textContent='Local waveform loaded; no prediction has been requested.';
+  $('predict').disabled=false;showPredictions({});draw();
+ }catch(e){$('status').textContent=e.message}
+};
+fetch('/explorer/data').then(r=>{if(!r.ok)throw Error('Could not load examples');return r.json()}).then(data=>{
+ dataset=data;$('source').textContent=data.source==='synthetic'?'SYNTHETIC EXAMPLES':'MEASURED MIT-BIH EXAMPLES';
+ $('selection').textContent=data.selection;filter();
+}).catch(e=>{$('status').textContent=e.message;$('predict').disabled=true});
+</script></body></html>

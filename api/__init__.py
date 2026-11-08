@@ -9,6 +9,7 @@ import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.explorer import router as explorer_router
 from src.data.segment import (
     AAMI_CLASSES,
     EXPECTED_FS_HZ,
@@ -18,6 +19,7 @@ from src.data.segment import (
     normalize_cnn_beats,
     validate_beat_window,
 )
+from src.models.artifacts import verify_bundle
 
 app = FastAPI(
     title="ECG Arrhythmia Detection API",
@@ -27,6 +29,8 @@ app = FastAPI(
     ),
     version="0.3.0",
 )
+
+app.include_router(explorer_router)
 
 _models_loaded = False
 _baseline_model = None
@@ -75,6 +79,14 @@ def _load_models() -> None:
             candidates[0],
         )
     )
+
+    if (model_dir / "manifest.json").exists():
+        try:
+            verify_bundle(model_dir)
+        except Exception as exc:
+            warnings.warn(f"Model bundle rejected: {exc}")
+            _models_loaded = True
+            return
 
     baseline_path = model_dir / "baseline_model.pkl"
     if baseline_path.exists():
