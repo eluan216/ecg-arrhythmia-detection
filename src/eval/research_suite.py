@@ -139,9 +139,7 @@ def run(args):
     torch.use_deterministic_algorithms(True)
     output = Path(args.output_dir)
     if (output / "manifest.json").exists():
-        raise FileExistsError(
-            "Choose a new output directory; completed bundles are immutable"
-        )
+        raise FileExistsError("Choose a new output directory; completed bundles are immutable")
     output.mkdir(parents=True, exist_ok=True)
     if args.download:
         download_mitbih(args.data_dir)
@@ -215,9 +213,7 @@ def run(args):
         classifier.fit(fit.features(rhythm), fit.labels)
         val_pred = classifier.predict(val.features(rhythm))
         validation_score = float(
-            f1_score(
-                val.labels, val_pred, labels=range(5), average="macro", zero_division=0
-            )
+            f1_score(val.labels, val_pred, labels=range(5), average="macro", zero_division=0)
         )
         classifier.fit(train.features(rhythm), train.labels)
         training_seconds = time.perf_counter() - started
@@ -289,9 +285,7 @@ def run(args):
                         "predictions": {
                             name: {
                                 "predicted_class": AAMI_CLASSES[int(p[i].argmax())],
-                                "probabilities": dict(
-                                    zip(AAMI_CLASSES, map(float, p[i]))
-                                ),
+                                "probabilities": dict(zip(AAMI_CLASSES, map(float, p[i]))),
                             }
                             for name, p in probabilities.items()
                         },
@@ -309,9 +303,7 @@ def run(args):
         encoding="utf-8",
     )
     report = {"protocol": protocol, "models": results, "class_labels": AAMI_CLASSES}
-    (output / "comparison.json").write_text(
-        json.dumps(report, indent=2), encoding="utf-8"
-    )
+    (output / "comparison.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     lines = [
         "# Measured research comparison",
         "",
@@ -341,9 +333,7 @@ def main():
         default="custom",
     )
     parser.add_argument("--data-dir", default="data/raw")
-    parser.add_argument(
-        "--split", default="reports/mitbih/2026-11-05/patient_split.json"
-    )
+    parser.add_argument("--split", default="reports/mitbih/2026-11-05/patient_split.json")
     parser.add_argument("--output-dir", default="artifacts/research")
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--bootstrap", type=int, default=200)

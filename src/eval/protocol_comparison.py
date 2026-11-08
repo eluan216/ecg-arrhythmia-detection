@@ -6,10 +6,7 @@ from pathlib import Path
 
 def main():
     paths = ["research", "ds1-ds2", "ds1-ds2-disjoint"]
-    reports = [
-        json.loads((Path("artifacts") / p / "comparison.json").read_text())
-        for p in paths
-    ]
+    reports = [json.loads((Path("artifacts") / p / "comparison.json").read_text()) for p in paths]
     lines = [
         "# Measured protocol comparison",
         "",
@@ -32,13 +29,9 @@ def main():
                 for report in reports
             ]
             lines.append(
-                f"| {model} / {metric} | "
-                + " | ".join(f"{100 * v:.2f}%" for v in values)
-                + " |"
+                f"| {model} / {metric} | " + " | ".join(f"{100 * v:.2f}%" for v in values) + " |"
             )
-    Path("artifacts/protocol-comparison.md").write_text(
-        "\n".join(lines) + "\n", encoding="utf-8"
-    )
+    Path("artifacts/protocol-comparison.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

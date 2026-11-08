@@ -47,9 +47,7 @@ def causal_rr_features(samples, fs):
     """Use earlier accepted beat locations only; never use the next beat or label."""
     samples = np.asarray(samples, dtype=np.int64)
     if fs <= 0 or not np.isfinite(fs) or np.any(np.diff(samples) <= 0):
-        raise ValueError(
-            "Beat locations must increase strictly and sampling rate must be positive"
-        )
+        raise ValueError("Beat locations must increase strictly and sampling rate must be positive")
     features = np.zeros((len(samples), 3), dtype=np.float64)
     intervals = np.diff(samples) / fs
     for i in range(1, len(samples)):
@@ -107,9 +105,7 @@ def read_annotated_record(
     original, samples = original[valid], samples[valid]
     if not accepted:
         raise ValueError(f"{record_id}: no mapped beats inside the recording")
-    windows = np.stack(
-        [segment_beat_around_rpeak(signal, int(s), beat_length) for s in samples]
-    )
+    windows = np.stack([segment_beat_around_rpeak(signal, int(s), beat_length) for s in samples])
     labels = np.asarray([AAMI_CLASS_INDEX[c] for _, c in accepted], dtype=np.int64)
     data = BeatDataset(
         windows.astype(np.float32),
@@ -131,10 +127,7 @@ def concatenate(datasets):
     if not datasets:
         raise ValueError("No datasets supplied")
     return BeatDataset(
-        **{
-            key: np.concatenate([getattr(d, key) for d in datasets])
-            for key in vars(datasets[0])
-        }
+        **{key: np.concatenate([getattr(d, key) for d in datasets]) for key in vars(datasets[0])}
     )
 
 

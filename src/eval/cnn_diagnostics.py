@@ -59,9 +59,7 @@ def run(args):
                     "normalization": normalization,
                     "selected_epoch": selected,
                     "validation_history": history,
-                    "best_validation_macro_f1": max(
-                        r["validation_macro_f1"] for r in history
-                    ),
+                    "best_validation_macro_f1": max(r["validation_macro_f1"] for r in history),
                 }
             )
     report = {
@@ -89,9 +87,7 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", default="data/raw")
-    parser.add_argument(
-        "--split", default="reports/mitbih/2026-11-05/patient_split.json"
-    )
+    parser.add_argument("--split", default="reports/mitbih/2026-11-05/patient_split.json")
     parser.add_argument("--output", default="artifacts/cnn-diagnostics.json")
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--threads", type=int, default=2)

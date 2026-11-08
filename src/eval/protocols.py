@@ -65,8 +65,7 @@ def fixed_partition(protocol):
 
 def shared_subjects(train, test):
     return sorted(
-        {subject_id_for_record(r) for r in train}
-        & {subject_id_for_record(r) for r in test}
+        {subject_id_for_record(r) for r in train} & {subject_id_for_record(r) for r in test}
     )
 
 
@@ -91,9 +90,7 @@ def nsv_focus(labels, predictions):
     if not mask.any():
         raise ValueError("No reference N/V/S beats")
     truth, pred = labels[mask], predictions[mask]
-    report = classification_report(
-        truth, pred, labels=range(5), output_dict=True, zero_division=0
-    )
+    report = classification_report(truth, pred, labels=range(5), output_dict=True, zero_division=0)
     return {
         "scope": "Reference N/V/S beats only; unchanged five-class model; F/Q predictions count as errors",
         "class_labels": AAMI_CLASSES,
